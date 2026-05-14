@@ -1,0 +1,86 @@
+{
+  "name": "fusabase",
+  "version": "26.1.0",
+  "type": "module",
+  "description": "FUSABASE Reference JS SDK",
+  "exports": {
+    "./auth": {
+      "types": "./dist/auth/src/index.d.ts",
+      "import": "./dist/auth/src/index.js"
+    },
+    "./oracledb": {
+      "types": "./dist/oracledb/src/index.d.ts",
+      "import": "./dist/oracledb/src/index.js"
+    },
+    "./storage": {
+      "types": "./dist/storage/src/index.d.ts",
+      "import": "./dist/storage/src/index.js"
+    },
+    "./app": {
+      "types": "./dist/app/src/index.d.ts",
+      "import": "./dist/app/src/index.js"
+    },
+    "./app-trust": {
+      "types": "./dist/app-trust/src/index.d.ts",
+      "import": "./dist/app-trust/src/index.js"
+    },
+    "./ui": {
+      "types": "./dist/ui/src/index.d.ts",
+      "import": "./dist/ui/src/index.js"
+    }
+  },
+  "browser": {
+    "./auth": "./dist/auth/src/index.js",
+    "./oracledb": "./dist/oracledb/src/index.js",
+    "./storage": "./dist/storage/src/index.js",
+    "./app": "./dist/app/src/index.js",
+    "./app-trust": "./dist/app-trust/src/index.js",
+    "./ui": "./dist/ui/src/index.js"
+  },
+  "typesVersions": {
+    "*": {
+      "auth": [
+        "./dist/auth/src/index.d.ts"
+      ],
+      "oracledb": [
+        "./dist/oracledb/src/index.d.ts"
+      ],
+      "storage": [
+        "./dist/storage/src/index.d.ts"
+      ],
+      "app": [
+        "./dist/app/src/index.d.ts"
+      ],
+      "app-trust": [
+        "./dist/app-trust/src/index.d.ts"
+      ],
+      "ui": [
+        "./dist/ui/src/index.d.ts"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copyfiles.js",
+    "test": "mocha test/**/*.test.js",
+    "docs": "typedoc",
+    "postdocs": "node scripts/docs.js",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "(Apache-2.0 OR UPL-1.0)",
+  "dependencies": {
+    "tslib": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/chai": "^5.2.2",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^24.7.1",
+    "chai": "^4.5.0",
+    "mocha": "^10.8.2",
+    "ts-node": "^10.9.2",
+    "typedoc": "^0.28.16",
+    "typescript": "^5.9.3"
+  }
+}

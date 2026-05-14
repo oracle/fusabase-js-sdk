@@ -1,0 +1,51 @@
+{
+  "compilerOptions": {
+    /* Output Settings */
+    "target": "ES2020",
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM"],
+    "outDir": "./dist",
+    "rootDir": "./packages",
+    "declaration": true,
+    "declarationMap": true,
+
+    /* Module Resolution */
+    "moduleResolution": "Node",
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+
+    /* Type Checking */
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictBindCallApply": true,
+    "strictFunctionTypes": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Lint-like Options */
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+
+    /* Performance / Compatibility */
+    "downlevelIteration": true,
+    "importHelpers": true,
+    "skipLibCheck": true,
+    "noEmitOnError": true,
+    "types": ["node", "chai", "mocha"],
+    "baseUrl": ".",
+    "paths": {
+      "fusabase/*": ["./packages/*/src"]
+    }
+  },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node",
+    "swc": false
+  },
+  "include": ["packages/**/src/**/*.ts", "packages/ui/src/*.d.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+

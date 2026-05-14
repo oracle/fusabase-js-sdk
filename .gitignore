@@ -1,0 +1,11 @@
+node_modules
+dist
+docs
+.vscode
+*.tgz
+/test/test_misc.js
+/test/video
+package-lock.json
+
+# Do not commit app-trust package tests
+packages/app-trust/test/

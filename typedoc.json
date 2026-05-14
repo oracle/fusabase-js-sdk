@@ -1,0 +1,33 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/auth/src/index.ts",
+    "packages/storage/src/index.ts",
+    "packages/oracledb/src/index.ts",
+    "packages/app/src/index.ts",
+    "packages/ui/src/index.ts"
+  ],
+  "out": "docs/api-reference",
+  "name": "Oracle® Backend For Firebase JavaScript Modular SDK Reference, Release 26.1.0",
+  "includeVersion": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "excludeExternals": false,
+  "hideGenerator": true,
+  "readme": "README.md",
+  "theme": "default",
+  "categorizeByGroup": true,
+  "categoryOrder": [
+    "Authentication",
+    "Database",
+    "Storage",
+    "App",
+    "AuthUI"
+  ],
+  "sort": [
+    "source-order",
+    "required-first",
+    "kind"
+  ]
+}
