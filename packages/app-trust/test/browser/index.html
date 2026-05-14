@@ -1,0 +1,108 @@
+<!-- // Copyright (c) 2015, 2026, Oracle and/or its affiliates.
+
+//-----------------------------------------------------------------------------
+//
+// This software is dual-licensed to you under the Universal Permissive License
+// (UPL) 1.0 as shown at https://oss.oracle.com/licenses/upl and Apache License
+// 2.0 as shown at http://www.apache.org/licenses/LICENSE-2.0. You may choose
+// either license.
+//
+// If you elect to accept the software under the Apache License, Version 2.0,
+// the following applies:
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+//-----------------------------------------------------------------------------
+//  -->
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FUSABASE AppCheck Browser Harness</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 16px; }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; }
+      label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+      input, select { padding: 8px; min-width: 280px; }
+      button { padding: 10px 12px; }
+      pre { background: #0b1020; color: #e6edf3; padding: 12px; border-radius: 8px; overflow: auto; max-height: 50vh; }
+      .muted { color: #666; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h2>FUSABASE AppCheck Browser Harness</h2>
+    <p class="muted">
+      Runs <strong>real providers</strong> in a browser and logs <strong>all REST calls</strong> +
+      <strong>tokens</strong> involved. This page patches <code>fetch</code> to log requests/responses.
+    </p>
+
+    <div class="row">
+      <label>
+        ORDS Host
+        <input id="ordsHost" value="https://phoenix555379.dev3sub4phx.databasede3phx.oraclevcn.com:8443/ords/USER1/" placeholder="https://.../ords/USER1/" />
+      </label>
+      <label>
+        Project ID
+        <input id="projectId" value="4E50B6A4D83256AEE0631F965E6411B9" placeholder="4D..." />
+      </label>
+      <label>
+        App ID (apiKey)
+        <input id="appId" value="4E50DA5DF9746710E0631F965E644323" placeholder="4D..." />
+      </label>
+      <!-- Action intentionally removed: harness uses SDK defaults -->
+    </div>
+
+    <div class="row" style="margin-top: 12px;">
+      <label>
+        Provider
+        <select id="provider">
+          <option value="recaptcha_v3">reCAPTCHA v3</option>
+          <option value="recaptcha_enterprise">reCAPTCHA Enterprise</option>
+          <option value="hcaptcha">hCaptcha</option>
+          <option value="turnstile">Turnstile</option>
+        </select>
+      </label>
+      <label>
+        Provider Site Key
+        <input id="siteKey" placeholder="site key" />
+      </label>
+      <!-- Use AppCheck toggle moved to AppCheck OFF/ON selector below -->
+      <label>
+        Redact tokens in logs
+        <select id="redact">
+          <option value="true">true</option>
+          <option value="false" selected>false</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="row" style="margin-top: 12px;">
+      <label>
+        AppCheck
+        <select id="appCheckEnabled">
+          <option value="false" selected>OFF</option>
+          <option value="true">ON</option>
+        </select>
+      </label>
+      <button id="btnRunQuery">db.collection("city").get()</button>
+      <button id="btnClear">Clear logs</button>
+    </div>
+
+    <h3>Logs</h3>
+    <pre id="log"></pre>
+
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>

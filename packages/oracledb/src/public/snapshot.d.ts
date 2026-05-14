@@ -1,13 +1,4 @@
-// Copyright (c) 2015, 2025, Oracle and/or its affiliates.
-
-import { Query } from "../collection/reference.js";
-import { QuerySnapshot } from "../collection/snapshot.js";
-import { DocumentSnapshot } from "../document/snapshot.js";
-import { Oracledb } from "../internal/core.js";
-import { DocumentData } from "../types/common.js";
-import { OracledbDataConverter } from "../types/converter.js";
-import { SnapshotListenOptions, Unsubscribe } from "../types/snapshot.js";
-import { OracledbError } from "../util/utils.js";
+// Copyright (c) 2015, 2026, Oracle and/or its affiliates.
 
 //-----------------------------------------------------------------------------
 //
@@ -33,6 +24,18 @@ import { OracledbError } from "../util/utils.js";
 //
 //-----------------------------------------------------------------------------
 // 
+
+// Copyright (c) 2015, 2025, Oracle and/or its affiliates.
+
+import { Query } from "../collection/reference.js";
+import { QuerySnapshot } from "../collection/snapshot.js";
+import { DocumentSnapshot } from "../document/snapshot.js";
+import { Oracledb } from "../internal/core.js";
+import { DocumentData } from "../types/common.js";
+import { OracledbDataConverter } from "../types/converter.js";
+import { SnapshotListenOptions, Unsubscribe } from "../types/snapshot.js";
+import { OracledbError } from "../util/utils.js";
+
 /**
  * Attaches a listener for real-time updates to the result set of a Oracledb Query.
  * 

@@ -23,6 +23,7 @@
 // limitations under the License.
 //
 //-----------------------------------------------------------------------------
+// 
 
 /**
  * Minimal IndexedDB wrapper used by App Check.
