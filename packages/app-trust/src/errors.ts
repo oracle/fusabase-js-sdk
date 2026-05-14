@@ -23,6 +23,7 @@
 // limitations under the License.
 //
 //-----------------------------------------------------------------------------
+// 
 
 export class FusabaseAppTrustError extends Error {
   status?: number;
