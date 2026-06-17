@@ -2,6 +2,8 @@
 
 A modular JavaScript SDK for Oracle Backend for Firebase (Fusabase) that provides authentication, document database, storage, App Trust, vector search, and UI component capabilities.
 
+This Oracle Backend for Firebase JavaScript SDK follows the Firebase design, API patterns, and rules-based authorization model. Its SDK interfaces are designed to mirror the Firebase SDK interfaces so developers can move across backends with minimal changes. This Oracle Backend for Firebase JavaScript SDK is a distinct Oracle offering.
+
 ## Prerequisites
 
 - Node.js (version 18 or later)
