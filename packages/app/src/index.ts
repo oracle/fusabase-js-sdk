@@ -29,7 +29,6 @@ import { App } from "./public-types.js";
 import { FusabaseError } from "./errors.js";
 import { LogLevel } from "../../logger/LogLevel.js";
 import {initializeApp, getApp, getApps, deleteApp, setLogLevel} from './app.js';
-import { fusabaseFetch } from './fusabase-fetch.js';
 
 /**
  * Initializes the FUSABASE app with the provided configuration options.
@@ -80,9 +79,3 @@ export { FusabaseError };
  */
 export {LogLevel};
 
-/**
- * Low-level fetch wrapper used internally by SDK modules.
- * Attaches FUSABASE headers (App Check + Instance Id) on eligible baas-services URLs
- * and retries once on 403 App Check failures.
- */
-export { fusabaseFetch };

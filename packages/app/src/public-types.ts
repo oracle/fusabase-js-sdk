@@ -36,6 +36,7 @@ interface AppConfig {
   storageBucket?: string;
   authType?: string;
   authID?: string;
+  idcsDomainURL?: string;
 }
 
 
@@ -142,7 +143,8 @@ export class App {
       objsType: this.options.objsType,
       storageBucket: this.options.storageBucket,
       authType: this.options.authType,
-      authID: this.options.authID
+      authID: this.options.authID,
+      idcsDomainURL: this.options.idcsDomainURL
     };
 
     this.configValue = config;
@@ -286,6 +288,11 @@ export interface FusabaseOptions {
    */
   authID?: string;
 
+  /**
+   * IDCS identity domain URL used for IDCS session logout.
+   */
+  idcsDomainURL?: string;
+
   useSocket?: boolean;
 
   longPollingInterval?: number;
@@ -299,31 +306,8 @@ export interface FusabaseOptions {
    */
   maxUploadBytes?: number;
 
-  idcsConfig?: IDCSDomainConfig;
-
   /** @internal */
-  appCheckToken?: string;
-}
-
-/**
- * @public
- *
- * Configuration options given to {@link initializeApp}
- */
-export interface IDCSDomainConfig {
-  /**
-   * custom name for the Fusabase App.
-   * The default value is `"[DEFAULT]"`.
-   */
-  domainURL?: string;
-  /**
-   * The settable config flag for GDPR opt-in/opt-out. Defaults to true.
-   */
-  clientId?: string;
-
-  clientSecret?: string;
-
-  selfRegistrationProfile?: string;
+  appTrustToken?: string;
 }
 
 /**
@@ -372,13 +356,13 @@ export interface FusabaseServerAppSettings
   authIdToken?: string;
 
   /**
-   * An optional App Check token. If provided, the Fusabase SDKs that use App Check will utilize
-   * this App Check token in place of requiring an instance of App Check to be initialized.
+   * An optional App Trust token. If provided, the Fusabase SDKs that use App Trust will utilize
+   * this App Trust token in place of requiring an instance of App Trust to be initialized.
    *
    * If the token fails local verification due to expiration or parsing errors, then a console error
    * is logged at the time of initialization of the `FusabaseServerApp` instance.
    */
-  appCheckToken?: string;
+  appTrustToken?: string;
 
   /**
    * An optional object. If provided, the Fusabase SDK uses a `FinalizationRegistry`

@@ -40,6 +40,17 @@ import { SnapshotMetadata } from '../listener/snapshot.js';
 import { QuerySnapshot } from './snapshot.js';
 import { IdTokenResult } from '../../../auth/src/types/idtoken.js';
 import { VectorSearch } from '../types/vector.js';
+import { normalizeLongPollingOptions } from '../internal/settings.js';
+
+function getLongPollingIntervalMs(db: any): number {
+  try {
+    return normalizeLongPollingOptions(
+      db._settings.experimentalLongPollingOptions
+    ).timeoutSeconds * 1000;
+  } catch (err) {
+    throw oracledbErrorHandler(err);
+  }
+}
 
 export class Query<AppModelType = DocumentData, DbModelType extends DocumentData = DocumentData> {
   /** @internal */ _conditions: any[] = [];
@@ -674,16 +685,19 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
       unsubscribe = () => {
         Utils.baasLogger(this.oracledb.app.logLevel, "in unsubscribe", _queryId);
 
-        const index = this.oracledb.__snaps[queryId].indexOf(_queryId);
-        if (index > -1) {
-          this.oracledb.__snaps[queryId].splice(index, 1);
-          delete this.oracledb.__callbacks[_queryId];
-        }
+        const activeListeners = this.oracledb.__snaps[queryId];
+        if (activeListeners) {
+          const index = activeListeners.indexOf(_queryId);
+          if (index > -1) {
+            activeListeners.splice(index, 1);
+            delete this.oracledb.__callbacks[_queryId];
+          }
 
-        if (this.oracledb.__snaps[queryId].length === 0) {
-          delete this.oracledb.__queryIdMap[queryId];
-          delete this.oracledb.__snaps[queryId];
-          this.oracledb.__sendMessage({ queryId, status: 0, payload });
+          if (activeListeners.length === 0) {
+            delete this.oracledb.__queryIdMap[queryId];
+            delete this.oracledb.__snaps[queryId];
+            this.oracledb.__sendMessage({ queryId, status: 0, payload });
+          }
         }
 
         if (callback.error) {
@@ -722,6 +736,7 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
 
       const db = this.oracledb;
       const colRef = this;
+      const pollingIntervalMs = getLongPollingIntervalMs(db);
 
       //polling
       function startPolling() {
@@ -806,9 +821,7 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
           }).catch(e => { Utils.baasLogger(db.app.logLevel, e) })
         }
 
-        let intervalId = setInterval(executeTask,
-          db._settings.experimentalLongPollingOptions.timeoutSeconds*1000);
-        // Continue to execute every 29 seconds
+        let intervalId = setInterval(executeTask, pollingIntervalMs);
 
         // Return a function to stop the continuous execution
         return function stopExecution() {

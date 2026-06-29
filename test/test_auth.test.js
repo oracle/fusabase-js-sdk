@@ -42,12 +42,12 @@ import {
 } from 'fusabase/auth';
 
 /**
- * App Check enforcement testing (Option 1):
- * Provide a *valid* FUSABASE App Check token via environment variable.
+ * App Trust enforcement testing (Option 1):
+ * Provide a *valid* FUSABASE App Trust token via environment variable.
  *
- *   FUSABASE_APP_CHECK_TOKEN="<token>" npm test
+ *   FUSABASE_APP_TRUST_TOKEN="<token>" npm test
  *
- * The SDK will attach it as `X-Fusabase-AppCheck` (see packages/app/src/app-trust-header.ts).
+ * The SDK will attach it as `X-Fusabase-AppTrust` (see packages/app/src/app-trust-header.ts).
  */
 
 
@@ -76,11 +76,11 @@ describe("fusabase Auth Tests", function () {
   const phoneNumber2 = "1234567892";
 
   before(() => {
-    // Option 1: If provided, this token is automatically attached as X-Fusabase-AppCheck
+    // Option 1: If provided, this token is automatically attached as X-Fusabase-AppTrust
     // on eligible SDK requests.
-    const appCheckToken = process.env.FUSABASE_APP_CHECK_TOKEN;
-    const initOptions = appCheckToken ? { ...options, appCheckToken } : options;
-    app = initializeApp({...options,appCheckToken:"APP_CHECK_TOKEN"}, "test");
+    const appTrustToken = process.env.FUSABASE_APP_TRUST_TOKEN;
+    const initOptions = appTrustToken ? { ...options, appTrustToken } : options;
+    app = initializeApp({...options,appTrustToken:"APP_TRUST_TOKEN"}, "test");
     setLogLevel(LogLevel.ERROR);
     auth_c = getAuth(app);
   });
@@ -96,13 +96,13 @@ describe("fusabase Auth Tests", function () {
       expect(app.options.authID).to.equal(options.auth_id);
     });
 
-    it("should include appCheckToken in app options when FUSABASE_APP_CHECK_TOKEN is set", function () {
-      const tok = process.env.FUSABASE_APP_CHECK_TOKEN;
+    it("should include appTrustToken in app options when FUSABASE_APP_TRUST_TOKEN is set", function () {
+      const tok = process.env.FUSABASE_APP_TRUST_TOKEN;
       if (!tok) {
-        expect((app.options || {}).appCheckToken).to.be.undefined;
+        expect((app.options || {}).appTrustToken).to.be.undefined;
         return;
       }
-      expect((app.options || {}).appCheckToken).to.equal(tok);
+      expect((app.options || {}).appTrustToken).to.equal(tok);
     });
   });
 

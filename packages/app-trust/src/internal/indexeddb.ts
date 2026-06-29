@@ -26,14 +26,14 @@
 // 
 
 /**
- * Minimal IndexedDB wrapper used by App Check.
+ * Minimal IndexedDB wrapper used by App Trust.
  *
  * Notes:
  * - Browser-only. In Node environments (no `indexedDB`) this becomes a no-op.
  * - Intentionally small (no external deps).
  */
 
-export type PersistedAppCheckToken = {
+export type PersistedAppTrustToken = {
   token: string;
   expireTimeMillis: number;
   updatedAtMillis: number;
@@ -80,19 +80,19 @@ async function withStore<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore
   }
 }
 
-export async function idbGetAppCheckToken(key: string): Promise<PersistedAppCheckToken | undefined> {
+export async function idbGetAppTrustToken(key: string): Promise<PersistedAppTrustToken | undefined> {
   if (!hasIndexedDb()) return undefined;
-  const result = await withStore<PersistedAppCheckToken | undefined>('readonly', (store) => store.get(key));
+  const result = await withStore<PersistedAppTrustToken | undefined>('readonly', (store) => store.get(key));
   if (!result || typeof result !== 'object') return undefined;
   return result;
 }
 
-export async function idbSetAppCheckToken(key: string, value: PersistedAppCheckToken): Promise<void> {
+export async function idbSetAppTrustToken(key: string, value: PersistedAppTrustToken): Promise<void> {
   if (!hasIndexedDb()) return;
   await withStore<IDBValidKey>('readwrite', (store) => store.put(value, key));
 }
 
-export async function idbRemoveAppCheckToken(key: string): Promise<void> {
+export async function idbRemoveAppTrustToken(key: string): Promise<void> {
   if (!hasIndexedDb()) return;
   await withStore<undefined>('readwrite', (store) => store.delete(key));
 }

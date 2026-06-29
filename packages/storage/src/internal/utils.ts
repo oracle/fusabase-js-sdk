@@ -136,7 +136,7 @@ export class Utils {
       "signature",
       "codeverifier",
       "apikey",
-      "appchecktoken",
+      "apptrusttoken",
     ].includes(normalizedKey);
   }
 
@@ -156,8 +156,8 @@ export class Utils {
 
     return value
       .replace(/(authorization\s*[:=]\s*)(bearer|basic)\s+[^&\s,"'}]+/gi, `$1$2 ${Utils.LOG_REDACTION}`)
-      .replace(/(\b(?:access_token|refresh_token|id_token|idToken|authnToken|token|assertion|password|client_secret|clientSecret|apiKey|appCheckToken|code_verifier|codeVerifier)\b\s*[:=]\s*)[^&\s,"'}]+/gi, `$1${Utils.LOG_REDACTION}`)
-      .replace(/([?&](?:access_token|refresh_token|id_token|token|assertion|password|client_secret|apiKey|appCheckToken|code|code_verifier)=)[^&#\s]+/gi, `$1${Utils.LOG_REDACTION}`)
+      .replace(/(\b(?:access_token|refresh_token|id_token|idToken|authnToken|token|assertion|password|client_secret|clientSecret|apiKey|appTrustToken|code_verifier|codeVerifier)\b\s*[:=]\s*)[^&\s,"'}]+/gi, `$1${Utils.LOG_REDACTION}`)
+      .replace(/([?&](?:access_token|refresh_token|id_token|token|assertion|password|client_secret|apiKey|appTrustToken|code|code_verifier)=)[^&#\s]+/gi, `$1${Utils.LOG_REDACTION}`)
       .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, Utils.LOG_REDACTION);
   }
 

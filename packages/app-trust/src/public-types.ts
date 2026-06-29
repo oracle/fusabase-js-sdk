@@ -29,7 +29,7 @@ import type { App } from '../../app/src/public-types.js';
 
 export interface AppTrustToken {
   /**
-   * FUSABASE App Check token value.
+   * FUSABASE App Trust token value.
    *
    * This is the token that is sent to FUSABASE backend endpoints
    */
@@ -51,7 +51,7 @@ export interface AppTrustOptions {
   /**
    * Provider used to mint an attestation token in the browser.
    *
-   * The minted provider token is exchanged with the FUSABASE App Check servlet
+   * The minted provider token is exchanged with the FUSABASE App Trust servlet
    */
   provider:
     | ReCaptchaV3Provider

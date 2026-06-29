@@ -36,7 +36,7 @@ import { GoogleAuthProvider } from '../providers/google.js';
 import { FacebookAuthProvider } from '../providers/facebook.js';
 import { GithubAuthProvider } from '../providers/github.js';
 import { OAuthProvider } from '../providers/oauth.js';
-import { IDCSConfig } from '../helpers/config.js';
+import { EmailAuthCredential } from '../internal/credential.js';
 
 /**
  * Represents a Fusabase user account.
@@ -106,18 +106,14 @@ export class User {
     this.phoneNumber = user.phoneNumbers ? user.phoneNumbers[0].value : null;
     this.photoURL = user.photos ? user.photos[0].value : null;
 
-    if (this.config.authType === 'idcs') {
-      this.userHelper = new IDCSUserHelper(auth.intConfig, authnToken, accessToken, auth._getLogLevel);
-      this.userHelper.user = this;
-    }
     // else if (this.config.authType === 'base_s' || this.config.authType === 'ldap_s') {
     //   this.userHelper = new ONPREMSRPUserHelper(auth.intConfig, authnToken, accessToken, auth._getLogLevel);
     // }
-    else {
-      this.userHelper = new ONPREMUserHelper(auth.intConfig, authnToken, accessToken, auth._getLogLevel);
-      this.userHelper.user = this;
-      (this.userHelper as any)?._setApp?.(auth.app);
-    }
+    this.userHelper = this.config.authType === 'idcs'
+      ? new IDCSUserHelper(auth.intConfig, authnToken, accessToken, auth._getLogLevel)
+      : new ONPREMUserHelper(auth.intConfig, authnToken, accessToken, auth._getLogLevel);
+    this.userHelper.user = this;
+    (this.userHelper as any)?._setApp?.(auth.app);
 
     this.auth = auth;
     this.schemas = user.schemas;
@@ -135,23 +131,21 @@ export class User {
       lastSignInTime: user.meta.lastSignIn
     } as UserMetadata;
 
-    if (this.config.authType === 'idcs') {
-      this.authHelper = new IDCSAuthHelper(
-        auth.intConfig,
-        auth._getLogLevel,
-        new URL(auth.app.options.ordsHost).origin
-      );
-    }
     // else if (this.config.authType === 'base_s' || this.config.authType === 'ldap_s') {
     //   this.authHelper = new ONPREMSRPAuthHelper(auth.intConfig, auth._getLogLevel);
     // }
-    else {
-      this.authHelper = new ONPREMAuthHelper(
-        auth.intConfig,
-        auth._getLogLevel,
-        new URL(auth.app.options.ordsHost).origin
-      );
-    }
+    this.authHelper = this.config.authType === 'idcs'
+      ? new IDCSAuthHelper(
+          auth.intConfig,
+          auth._getLogLevel,
+          new URL(auth.app.options.ordsHost).origin
+        )
+      : new ONPREMAuthHelper(
+          auth.intConfig,
+          auth._getLogLevel,
+          new URL(auth.app.options.ordsHost).origin
+        );
+    (this.authHelper as any)?._setApp?.(auth.app);
 
   }
 
@@ -204,6 +198,11 @@ export class User {
    * @returns {Promise<String>} JWT accessToken
    */
   async getIdToken(forceRefresh = false) : Promise<string | null>  {
+    if (this.auth.currentUser && this.auth.currentUser.email != this.email) {
+      let err = new AuthError(ErrorCodeMessage.INVALID_ARGS, "User mismatch!");
+      err.status = 400;
+      throw authErrorHandler(err);
+    }
     argCheck(forceRefresh, "Invalid value", true, [typeStrings.BOOL]);
     if (forceRefresh || !this.userHelper?.validateAccessToken()) {
       try {
@@ -252,8 +251,10 @@ export class User {
       }
       
       try {
-        let token = await this.userHelper?.fetchFusabaseToken(`${this.auth.app.options.ordsHost}_/baas-services/idm/idcs/${this.config.projectID}/${IDCSConfig.FETCH_FUSABASE_TOKEN}?apiKey=${this.config.appID}`, this.auth.app);
-        this.userHelper!.fusabase_token = new IdTokenResult(token ?? "");
+        const token = this.userHelper?.fetchFusabaseToken("", this.auth.app);
+        if (token) {
+          this.userHelper!.fusabase_token = new IdTokenResult(token);
+        }
       } catch (err:any) {
         Utils.baasLogger(this.auth.app.logLevel,"could not fetch token");
       }
@@ -396,6 +397,12 @@ async updateProfile(userProfile: any) : Promise<void> {
    * @internal
    */
   async linkWithCredential(credential: AuthCredential): Promise<UserCredential> {
+    if (credential instanceof EmailAuthCredential 
+      && credential.email !== this.email) {
+        let error = new AuthError(ErrorCodeMessage.INVALID_ARGS,`Invalid credentials`);
+      error.status = 400;
+      throw authErrorHandler(error);
+    }
     await this.getIdToken();
     await this.userHelper?.linkWithCredentialHelper(credential);
     await this.reload();
@@ -412,14 +419,6 @@ async updateProfile(userProfile: any) : Promise<void> {
    * @internal
    */
   async linkWithPopup(provider: AuthProvider): Promise<UserCredential> {
-    if (this.auth.config.authType === "idcs") {
-      const err: any = new Error(
-        "Method is not supported in IDCS authentication"
-      );
-      err.status = ErrorCode.NOT_IMPLEMENT;
-      err.authType = "IDCS";
-      throw authErrorHandler(err);
-    }
      if (!(provider instanceof GoogleAuthProvider || 
           provider instanceof FacebookAuthProvider ||
           provider instanceof GithubAuthProvider
@@ -433,32 +432,17 @@ async updateProfile(userProfile: any) : Promise<void> {
       let url = "";
       const method = provider.providerName as string;
       const contextUri = `${window.location.origin}${window.location.pathname}`;
+      const authTypePath = this.auth.app.options.authType === "idcs" ? "idcs" : "onprem";
 
-      if (this.auth.app.options.authType === "idcs") {
-        const popupUrl = new URL(`${this.auth.app.options.ordsHost}_/baas-services/idm/idcs/${this.auth.intConfig.projectID}/socialLink`);
-        popupUrl.searchParams.set('method', method);
-        popupUrl.searchParams.set('apiKey', this.auth.app.options.appID);
-        popupUrl.searchParams.set('context_uri', contextUri);
-        url = popupUrl.toString();
-
-      } else {
-        const popupUrl = new URL(`${this.auth.app.options.ordsHost}_/baas-services/idm/onprem/${this.auth.intConfig.projectID}/socialidp`);
-        popupUrl.searchParams.set('method', method);
-        popupUrl.searchParams.set('device', 'web');
-        popupUrl.searchParams.set('apiKey', this.auth.app.options.appID);
-        popupUrl.searchParams.set('link', '1');
-        popupUrl.searchParams.set('context_uri', contextUri);
-        url = popupUrl.toString();
-      }
+      const popupUrl = new URL(`${this.auth.app.options.ordsHost}_/baas-services/idm/${authTypePath}/${this.auth.intConfig.projectID}/socialidp`);
+      popupUrl.searchParams.set('method', method);
+      popupUrl.searchParams.set('device', 'web');
+      popupUrl.searchParams.set('apiKey', this.auth.app.options.appID);
+      popupUrl.searchParams.set('link', '1');
+      popupUrl.searchParams.set('context_uri', contextUri);
+      url = popupUrl.toString();
 
       const tokensObj: any = await this.userHelper?.socialLink(url);
-
-      if (this.auth.app.options.authType === "idcs") {
-        if (tokensObj && tokensObj.success === 1) {
-          await this.reload();
-          return this.auth.userCredential!;
-        }
-      }
 
       const idToken = tokensObj.idToken!;
       const providerMap: Record<string, any> = {
@@ -491,16 +475,6 @@ async updateProfile(userProfile: any) : Promise<void> {
    * @internal
    */
   async linkWithRedirect(provider: AuthProvider): Promise<never> {
-
-    if (this.auth.config.authType === "idcs") {
-      const err: any = new Error(
-        "Method is not supported in IDCS authentication"
-      );
-      err.status = ErrorCode.NOT_IMPLEMENT;
-      err.authType = "IDCS";
-      throw authErrorHandler(err);
-    }
-
     const invalid =
       !(
         provider instanceof GoogleAuthProvider ||
@@ -524,7 +498,8 @@ async updateProfile(userProfile: any) : Promise<void> {
       localStorage.setItem("providerId", provider.providerName);
 
       // Build base URL safely
-      const baseUrl = `${this.auth.app.options.ordsHost}_/baas-services/idm/onprem/${this.auth.intConfig.projectID}/socialidp`;
+      const authTypePath = this.auth.app.options.authType === "idcs" ? "idcs" : "onprem";
+      const baseUrl = `${this.auth.app.options.ordsHost}_/baas-services/idm/${authTypePath}/${this.auth.intConfig.projectID}/socialidp`;
 
       // Create URL object (prevents string-based injection)
       const redirectUrl = new URL(baseUrl);

@@ -26,7 +26,7 @@
 // 
 
 import { App } from "../../../app/src/public-types.js";
-import { authErrorHandler, AuthError, ErrorCodeMessage } from "../errors.js";
+import { AuthError, ErrorCodeMessage } from "../errors.js";
 
 /**
  * Class representing the configuration of the application. 
@@ -59,7 +59,7 @@ export class ONPREMConfig extends Config {
   static AUTHENTICATE_REST_EP = "authenticate";
   static SELF_REGISTER_EP = "useradd";
   static UPDATE_PASSWORD_HELPER = "changePassword";
-  static UPDATE_PROFILE_HELPER = "updateProfile";
+  static UPDATE_PROFILE_HELPER = "profile";
   static REVOKE_REFRESH_TOKEN = "rf/revoke";
   static SEND_EMAIL_VERIFICATION = "sendemail";
   static SEND_PASSWORD_RESET_EMAIL = "sendemail";
@@ -93,60 +93,23 @@ export class ONPREMConfig extends Config {
 /**
  * @internal
  */
-export class IDCSConfig extends Config {
-  public domainURL: string;
-  public appID: string;
-  public clientId: string;
-  public clientSecret: string;
-  public selfRegistrationProfile?: string;
-  public projectID: string;
-  public authID: string;
+export class IDCSConfig extends ONPREMConfig {
+  public idcsDomainURL: string;
 
-  static AUTHENTICATE_REST_EP = "/sso/v1/sdk/authenticate";
-  static OAUTH_TOKEN_REST_EP = "/oauth2/v1/token";
-  static SELF_ME_REST_EP = "/admin/v1/Me";
   static LOGOUT_REST_EP = "/oauth2/v1/userlogout";
-  static REVOKE_REFRESH_TOKEN_REST_EP = "/oauth2/v1/revoke";
-  static SEND_PASSWORD_RESET_EMAIL = "/admin/v1/MePasswordResetRequestor"
-  static CONFIRM_PASSWORD_RESET = "/admin/v1/MePasswordResetter"
-  static VERIFY_PASSWORD_RESET_CODE = "/admin/v1/UserTokenValidator"
-  static UPDATE_PASSWORD_HELPER = "/admin/v1/MePasswordChanger"
-  static SEND_EMAIL_VERIFICATION = "/admin/v1/MeEmailVerifier";
-  static FETCH_FUSABASE_TOKEN = "tokenExchange";
-  static REDIRECT_RESULT_EP = "redirectResult";
-  static ADD_USER_REST_EP = "useradd";
 
   /**
    * Constructs the IDCS config.
-   * @param {string} domainURL 
-   * @param {string} clientId 
-   * @param {string} clientSecret 
+   * @param {string} domainURL
+   * @param {string} appID
+   * @param {string} authID
+   * @param {string} authType
+   * @param {string} projectID
+   * @param {string} idcsDomainURL
    */
-  constructor(domainURL: string, clientId: string, clientSecret: string, selfRegistrationProfile?: string, appID?: string,
-     projectID?: string) {
-    // Validating Arguments
-    super('idcs');
-
-    if (domainURL.length === 0) {
-      let error = new AuthError(ErrorCodeMessage.INVALID_ARGS, `Domain URL is not provided`);
-      throw authErrorHandler(error);
-    }
-    else if (clientId.length === 0) {
-      let error = new AuthError(ErrorCodeMessage.INVALID_ARGS, `Client ID is not provided`);
-      throw authErrorHandler(error);
-    }
-    else if (clientSecret.length === 0) {
-      let error = new AuthError(ErrorCodeMessage.INVALID_ARGS, `Client Secret is not provided`);
-      throw authErrorHandler(error);
-    }
-
-    this.domainURL = domainURL;
-    this.appID = appID!
-    this.authID = "";
-    this.clientId = clientId;
-    this.clientSecret = clientSecret;
-    this.selfRegistrationProfile = selfRegistrationProfile;
-    this.projectID = projectID!;
+  constructor(domainURL: string, appID: string, authID: string, authType: string, projectID: string, idcsDomainURL: string) {
+    super(domainURL, appID, authID, authType, projectID);
+    this.idcsDomainURL = idcsDomainURL.replace(/\/+$/, "");
   }
 }
 
@@ -169,14 +132,14 @@ export function getConfig(app: App): IDCSConfig | ONPREMConfig {
     )
   } else if (projectConfig.authType === 'idcs') {
     return new IDCSConfig(
-      projectConfig.idcsConfig?.domainURL ?? "",
-      projectConfig.idcsConfig?.clientId ?? "",
-      projectConfig.idcsConfig?.clientSecret ?? "",
-      projectConfig.idcsConfig?.selfRegistrationProfile ?? "",
-      projectConfig.appID,
-      projectConfig.projectID
+      `${projectConfig.ordsHost}_/baas-services/idm/idcs/${projectConfig.projectID}/`,
+      projectConfig.appID ?? "",
+      projectConfig.authID ?? "",
+      projectConfig.authType,
+      projectConfig.projectID ?? "",
+      projectConfig.idcsDomainURL ?? ""
     )
-  } 
+  }
   // else if (projectConfig.authType === 'base_s'
   //   || projectConfig.authType === 'ldap_s') {
   //   return new ONPREMSRPConfig(

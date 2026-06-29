@@ -26,33 +26,34 @@
 // 
 
 import type { App } from './public-types.js';
-import { attachAppCheckHeader, getAppCheckToken, shouldAttachAppCheckHeader } from './app-trust-header.js';
+import { attachAppTrustHeader, getAppTrustToken, shouldAttachAppTrustHeader } from './app-trust-header.js';
 
-function includesAppCheckHint(text: string): boolean {
+function includesAppTrustHint(text: string): boolean {
   return text.toLowerCase().includes('appcheck');
 }
 
 /** @internal */
 export async function fusabaseFetch(app: App | undefined, url: string, init: RequestInit): Promise<Response> {
   const doFetch = (reqInit: RequestInit) => fetch(url, reqInit);
+  const shouldAttachHeaders = shouldAttachAppTrustHeader(app, url);
 
-  if (app && shouldAttachAppCheckHeader(url)) {
-    const appCheckInstance = (app as any)?._appCheckInstance;
-    const tok = getAppCheckToken(app);
-    if (appCheckInstance && !tok) {
+  if (app && shouldAttachHeaders) {
+    const appTrustInstance = (app as any)?._appTrustInstance;
+    const tok = getAppTrustToken(app);
+    if (appTrustInstance && !tok) {
       try {
         const { getToken } = await import('../../app-trust/src/app-trust.js');
-        await getToken(appCheckInstance, false);
+        await getToken(appTrustInstance, false);
       } catch {
       }
     }
   }
 
-  let reqInit = attachAppCheckHeader(app, url, init);
+  let reqInit = attachAppTrustHeader(app, url, init);
 
   let res = await doFetch(reqInit);
 
-  if (!shouldAttachAppCheckHeader(url)) return res;
+  if (!shouldAttachHeaders) return res;
   if (res.status !== 401) return res;
 
   let bodyText = '';
@@ -61,19 +62,19 @@ export async function fusabaseFetch(app: App | undefined, url: string, init: Req
   } catch {
     // ignore
   }
-  if (!bodyText || !includesAppCheckHint(bodyText)) return res;
+  if (!bodyText || !includesAppTrustHint(bodyText)) return res;
 
-  const appCheckInstance = (app as any)?._appCheckInstance;
-  if (!appCheckInstance) return res;
+  const appTrustInstance = (app as any)?._appTrustInstance;
+  if (!appTrustInstance) return res;
 
   try {
     const { getToken } = await import('../../app-trust/src/app-trust.js');
-    await getToken(appCheckInstance, true);
+    await getToken(appTrustInstance, true);
   } catch {
     return res;
   }
 
-  reqInit = attachAppCheckHeader(app, url, init);
+  reqInit = attachAppTrustHeader(app, url, init);
   res = await doFetch(reqInit);
   return res;
 }

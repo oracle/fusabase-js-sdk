@@ -105,7 +105,7 @@ describe('fusabase Integration Tests for version 1', function () {
   
 
   it('should initialize the app', () => {
-    app = initializeApp({...options,appCheckToken:"APP_CHECK_TOKEN"}, "test");
+    app = initializeApp({...options,appTrustToken:"APP_TRUST_TOKEN"}, "test");
     expect(app.options.ordsHost, options.ords_host);
     expect(app.options.schema, options.schema);
     expect(app.options.appID, options.app_id);
@@ -971,7 +971,7 @@ describe('fusabase Integration Tests for version 2', function () {
   
 
   it('should initialize the app', () => {
-    app = initializeApp({...options,appCheckToken:"APP_CHECK_TOKEN"}, "test");
+    app = initializeApp({...options,appTrustToken:"APP_TRUST_TOKEN"}, "test");
     expect(app.options.ordsHost, options.ords_host);
     expect(app.options.schema, options.schema);
     expect(app.options.appID, options.app_id);

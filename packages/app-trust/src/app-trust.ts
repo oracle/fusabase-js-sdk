@@ -33,10 +33,11 @@ import type {
   AppTrustTokenListener,
   Unsubscribe,
 } from './public-types.js';
+import { HCaptchaProvider, ReCaptchaEnterpriseProvider } from './public-types.js';
 import { FusabaseAppTrustError } from './errors.js';
 import { fusabaseFetch } from '../../app/src/fusabase-fetch.js';
-import { setAppCheckToken } from '../../app/src/app-trust-header.js';
-import { idbGetAppCheckToken, idbRemoveAppCheckToken, idbSetAppCheckToken } from './internal/indexeddb.js';
+import { setAppTrustToken } from '../../app/src/app-trust-header.js';
+import { idbGetAppTrustToken, idbRemoveAppTrustToken, idbSetAppTrustToken } from './internal/indexeddb.js';
 
 type Observer = {
   next?: (value: AppTrustTokenResult) => void;
@@ -52,22 +53,28 @@ type InternalState = {
   listeners: Set<AppTrustTokenListener>;
 };
 
+type AttestRequest = {
+  provider: string;
+  attestationToken: string;
+  action: string;
+  deviceInfo: {
+    platform: string;
+    userAgent: string;
+  };
+  siteKey?: string;
+};
+
 type AttestResponse = {
   attestToken: string;
 };
 
-class AppCheckImpl implements AppTrust {
+class AppTrustImpl implements AppTrust {
   constructor(readonly app: App) {}
   /** @internal */
   _state!: InternalState;
 }
 
-// Keep legacy names internally; public API is App Trust.
-type AppCheck = AppTrust;
-type AppCheckTokenResult = AppTrustTokenResult;
-type AppCheckTokenListener = AppTrustTokenListener;
-
-const APP_CHECK_INSTANCE = new WeakMap<App, AppCheckImpl>();
+const APP_TRUST_INSTANCE = new WeakMap<App, AppTrustImpl>();
 
 function assertProvider(provider: AppTrustOptions['provider']): { _getAttestationToken: (action: string) => Promise<string> } {
   if ((provider as any)?._getAttestationToken instanceof Function) {
@@ -99,6 +106,13 @@ function buildAttestUrl(app: App): string {
   return `${base}/_/baas-services/appcheck/${encodeURIComponent(projectId)}/attest?apiKey=${encodeURIComponent(apiKey)}`;
 }
 
+function siteKeyForAttestationRequest(provider: InternalState['provider']): string | undefined {
+  if (provider instanceof HCaptchaProvider || provider instanceof ReCaptchaEnterpriseProvider) {
+    return provider.siteKey;
+  }
+  return undefined;
+}
+
 function parseExpiresAtToMillis(expiresAt: string | undefined): number {
   if (expiresAt) {
     // Keep signature for backward compatibility but do not rely on expiresAt.
@@ -117,7 +131,7 @@ function emit(state: InternalState, token: AppTrustTokenResult): void {
   }
 }
 
-function appCheckStorageKey(app: App): string {
+function appTrustStorageKey(app: App): string {
   const projectId = String(app.options.projectID ?? '').trim();
   const appId = String(app.options.appID ?? '').trim();
   return `${projectId}:${appId}`;
@@ -125,20 +139,20 @@ function appCheckStorageKey(app: App): string {
 
 function clearLegacyAppTokenMirrors(app: App): void {
   try {
-    delete (app as any)._appCheckToken;
-    delete (app as any)._appCheckTokenPersisted;
+    delete (app as any)._appTrustToken;
+    delete (app as any)._appTrustTokenPersisted;
   } catch {
     // ignore
   }
 }
 
 async function loadPersistedTokenIntoState(state: InternalState): Promise<void> {
-  const key = appCheckStorageKey(state.app);
-  const persisted = await idbGetAppCheckToken(key);
+  const key = appTrustStorageKey(state.app);
+  const persisted = await idbGetAppTrustToken(key);
   if (!persisted?.token) return;
 
   if (!persisted.expireTimeMillis || persisted.expireTimeMillis <= Date.now() + 5000) {
-    await idbRemoveAppCheckToken(key);
+    await idbRemoveAppTrustToken(key);
     return;
   }
 
@@ -148,30 +162,30 @@ async function loadPersistedTokenIntoState(state: InternalState): Promise<void> 
   };
 
   state.cachedToken = tokenResult;
-  setAppCheckToken(state.app, tokenResult.token);
+  setAppTrustToken(state.app, tokenResult.token);
   clearLegacyAppTokenMirrors(state.app);
 }
 
 export function initializeAppTrust(app: App | undefined, options: AppTrustOptions): AppTrust {
   if (!app) throw new FusabaseAppTrustError('App is required', { status: 400, code: 'app-trust/no-app' });
-  if (APP_CHECK_INSTANCE.has(app)) {
+  if (APP_TRUST_INSTANCE.has(app)) {
     throw new FusabaseAppTrustError('App Trust already initialized for this app', {
       status: 400,
       code: 'app-trust/already-initialized',
     });
   }
 
-  const instance = new AppCheckImpl(app);
+  const instance = new AppTrustImpl(app);
   const provider = assertProvider(options.provider);
   instance._state = {
     app,
     provider,
     listeners: new Set(),
   };
-  APP_CHECK_INSTANCE.set(app, instance);
+  APP_TRUST_INSTANCE.set(app, instance);
 
   try {
-    (app as any)._appCheckInstance = instance;
+    (app as any)._appTrustInstance = instance;
   } catch {
     // ignore
   }
@@ -181,17 +195,17 @@ export function initializeAppTrust(app: App | undefined, options: AppTrustOption
   return instance;
 }
 
-export async function getToken(appCheckInstance: AppCheck, forceRefresh: boolean = false): Promise<AppCheckTokenResult> {
+export async function getToken(appTrustInstance: AppTrust, forceRefresh: boolean = false): Promise<AppTrustTokenResult> {
   /**
-   * Returns an FUSABASE App Check token.
+   * Returns an FUSABASE App Trust token.
    *
    * - If `forceRefresh` is `false`, a cached token will be returned when still
    *   valid.
    * - If `forceRefresh` is `true`, the SDK will mint a new provider attestation
-   *   token and exchange it with the FUSABASE App Check servlet.
+   *   token and exchange it with the FUSABASE App Trust servlet.
    *
    */
-  const impl = appCheckInstance as AppCheckImpl;
+  const impl = appTrustInstance as AppTrustImpl;
   const state = impl?._state;
   if (!state) {
     throw new FusabaseAppTrustError('Invalid App Trust instance', { status: 400, code: 'app-trust/invalid-instance' });
@@ -210,7 +224,7 @@ export async function getToken(appCheckInstance: AppCheck, forceRefresh: boolean
   state.inFlight = (async () => {
     let result: AppTrustTokenResult;
 
-    const action = 'fusabase-attest';
+    const action = 'attest';
     const attestationToken = await state.provider._getAttestationToken(action);
 
     const platform = String((state.app.options as any)?.appType ?? 'web').toLowerCase();
@@ -218,16 +232,21 @@ export async function getToken(appCheckInstance: AppCheck, forceRefresh: boolean
       platform,
       userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
     };
+    const attestRequest: AttestRequest = {
+      provider: providerKeyForWeb(platform, state.app.options.appID ?? ''),
+      attestationToken,
+      action,
+      deviceInfo,
+    };
+    const siteKey = siteKeyForAttestationRequest(state.provider);
+    if (siteKey) {
+      attestRequest.siteKey = siteKey;
+    }
     const attestUrl = buildAttestUrl(state.app);
     const res = await fusabaseFetch(state.app, attestUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        provider: providerKeyForWeb(platform, state.app.options.appID ?? ''),
-        attestationToken,
-        action,
-        deviceInfo,
-      }),
+      body: JSON.stringify(attestRequest),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -246,17 +265,17 @@ export async function getToken(appCheckInstance: AppCheck, forceRefresh: boolean
     }
     result = {
       token: json.attestToken,
-      // OpenAPI does not define expiresAt; treat AppCheck token as short-lived cache.
+      // OpenAPI does not define expiresAt; treat AppTrust token as short-lived cache.
       expireTimeMillis: parseExpiresAtToMillis(undefined),
     };
 
     state.cachedToken = result;
-    setAppCheckToken(state.app, result.token);
+    setAppTrustToken(state.app, result.token);
     clearLegacyAppTokenMirrors(state.app);
 
     try {
-      const key = appCheckStorageKey(state.app);
-      await idbSetAppCheckToken(key, {
+      const key = appTrustStorageKey(state.app);
+      await idbSetAppTrustToken(key, {
         token: result.token,
         expireTimeMillis: result.expireTimeMillis,
         updatedAtMillis: Date.now(),
@@ -274,21 +293,21 @@ export async function getToken(appCheckInstance: AppCheck, forceRefresh: boolean
   return state.inFlight;
 }
 
-export function onTokenChanged(appCheckInstance: AppCheck, observer: Partial<Observer>): Unsubscribe;
+export function onTokenChanged(appTrustInstance: AppTrust, observer: Partial<Observer>): Unsubscribe;
 export function onTokenChanged(
-  appCheckInstance: AppCheck,
-  onNext: (tokenResult: AppCheckTokenResult) => void,
+  appTrustInstance: AppTrust,
+  onNext: (tokenResult: AppTrustTokenResult) => void,
   onError?: (error: Error) => void,
   onCompletion?: () => void
 ): Unsubscribe;
 export function onTokenChanged(
-  appCheckInstance: AppCheck,
-  a: Partial<Observer> | ((tokenResult: AppCheckTokenResult) => void),
+  appTrustInstance: AppTrust,
+  a: Partial<Observer> | ((tokenResult: AppTrustTokenResult) => void),
   b?: (error: Error) => void,
   c?: () => void
 ): Unsubscribe {
   /**
-   * Registers a listener for App Check token changes.
+   * Registers a listener for App Trust token changes.
    *
    * The callback will be called whenever a new token is minted and cached.
    * If a cached token already exists, the listener is invoked asynchronously
@@ -296,7 +315,7 @@ export function onTokenChanged(
    *
    * @returns An unsubscribe function.
    */
-  const impl = appCheckInstance as AppCheckImpl;
+  const impl = appTrustInstance as AppTrustImpl;
   const state = impl?._state;
   if (!state) {
     throw new FusabaseAppTrustError('Invalid App Trust instance', { status: 400, code: 'app-trust/invalid-instance' });
@@ -309,7 +328,7 @@ export function onTokenChanged(
     // unused
   }
 
-  const listener: AppCheckTokenListener = (t) => {
+  const listener: AppTrustTokenListener = (t) => {
     try {
       next?.(t);
     } catch (e) {
