@@ -26,9 +26,13 @@
 // 
 
 import { FusabaseError } from "./errors.js";
-import { App, FusabaseOptions, IDCSDomainConfig } from "./public-types.js"; // your options interface
+import { App, FusabaseOptions } from "./public-types.js"; // your options interface
 import {LogLevel} from "../../logger/LogLevel.js";
 import { getOrCreateBrowserInstanceId } from './instance-id.js';
+import {
+  DEFAULT_LONG_POLLING_TIMEOUT_SECONDS,
+  validateLongPollingTimeoutSeconds
+} from "../../oracledb/src/internal/settings.js";
 
 // Error type with HTTP-like status
 interface ErrorWithStatus extends Error {
@@ -171,6 +175,18 @@ function argCheck<T>(
   return value;
 }
 
+function getConfiguredLongPollingInterval(options: Record<string, any>): number {
+  if (!Object.prototype.hasOwnProperty.call(options, "long_polling_interval")) {
+    return DEFAULT_LONG_POLLING_TIMEOUT_SECONDS;
+  }
+
+  try {
+    return validateLongPollingTimeoutSeconds(options["long_polling_interval"]);
+  } catch (err) {
+    throw appErrorHandler(err as ErrorWithStatus);
+  }
+}
+
 // -------------------- SOBa Core Object --------------------
 const fusabase = {
 
@@ -195,14 +211,9 @@ const fusabase = {
     argCheck(options_sdk["auth_type"], getErrorMessage('invalidAuthType'), true, [typeStrings.STRING]);
     argCheck(options_sdk["app_type"], "Invalid app type", true, [typeStrings.STRING]);
 
-    if (!options_sdk["idcs_config"]) {
-      argCheck(options_sdk["auth_id"], getErrorMessage('invalidAuthId'), true, [typeStrings.STRING]);
-    }
-
-    if (options_sdk["idcs_config"]) {
-      argCheck(options_sdk["idcs_config"]["domain_url"], getErrorMessage('invalidDomainUrl'), true, [typeStrings.STRING]);
-      argCheck(options_sdk["idcs_config"]["clientId"], getErrorMessage('invalidClientId'), true, [typeStrings.STRING]);
-      argCheck(options_sdk["idcs_config"]["clientSecret"], getErrorMessage('invalidClientCreds'), true, [typeStrings.STRING]);
+    argCheck(options_sdk["auth_id"], getErrorMessage('invalidAuthId'), true, [typeStrings.STRING]);
+    if (String(options_sdk["auth_type"]).toLowerCase() === "idcs") {
+      argCheck(options_sdk["idcs_domain_url"], "Invalid IDCS domain URL", true, [typeStrings.STRING]);
     }
 
     argCheck(options_sdk["use_socket"], getErrorMessage('invalidSocketValue'), false, [typeStrings.BOOL]);
@@ -210,6 +221,8 @@ const fusabase = {
     argCheck(options_sdk["version"], getErrorMessage('invalidOracledbVersion'), false, [typeStrings.INT]);
     argCheck(options_sdk["upload_chunk_size"], getErrorMessage('invalidChunkSize'), false, [typeStrings.INT]);
     argCheck(options_sdk["max_upload_bytes"], getErrorMessage('invalidMaxUploadBytes'), false, [typeStrings.INT]);
+
+    const longPollingInterval = getConfiguredLongPollingInterval(options_sdk);
 
     const options: FusabaseOptions = {
       ordsHost: options_sdk["ords_host"],
@@ -221,27 +234,17 @@ const fusabase = {
       storageBucket: options_sdk["storage_bucket"],
       authType: options_sdk["auth_type"].toLowerCase(),
       authID: options_sdk["auth_id"],
+      idcsDomainURL: options_sdk["idcs_domain_url"],
       useSocket: options_sdk["use_socket"] === true ? options_sdk["use_socket"] : false,
-      longPollingInterval: options_sdk["long_polling_interval"]
-        ? options_sdk["long_polling_interval"]
-        : 29,
+      longPollingInterval,
       version: options_sdk["version"] ? options_sdk["version"] : 2,
-      appCheckToken: options_sdk["appCheckToken"] ? options_sdk["appCheckToken"] : null,
+      appTrustToken: options_sdk["appTrustToken"] ? options_sdk["appTrustToken"] : null,
       chunkSize: options_sdk["upload_chunk_size"] ? options_sdk["upload_chunk_size"] : 16 * 1024 * 1024,
       maxUploadBytes: options_sdk["max_upload_bytes"],
     };
 
-    if (typeof options_sdk["appCheckToken"] === 'string' && options_sdk["appCheckToken"]) {
-      (options as any).appCheckToken = options_sdk["appCheckToken"];
-    }
-
-    if (options_sdk["idcs_config"] != null) {
-      options.idcsConfig = {
-        domainURL: options_sdk["idcs_config"]["domain_url"],
-        clientId: options_sdk["idcs_config"]["clientId"],
-        clientSecret: options_sdk["idcs_config"]["clientSecret"],
-        selfRegistrationProfile: "",
-      } as IDCSDomainConfig;
+    if (typeof options_sdk["appTrustToken"] === 'string' && options_sdk["appTrustToken"]) {
+      (options as any).appTrustToken = options_sdk["appTrustToken"];
     }
 
     const appInstance = new App(options, name);

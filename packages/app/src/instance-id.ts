@@ -30,13 +30,18 @@ export const FUSABASE_INSTANCE_ID_STORAGE_KEY = 'fusabase_instance_id';
 /** @internal */
 export function generateInstanceId(): string {
   try {
-    const c: any = (globalThis as any).crypto;
+    const c: Crypto | undefined = (globalThis as typeof globalThis & { crypto?: Crypto }).crypto;
     if (c?.randomUUID) return String(c.randomUUID());
+    if (c?.getRandomValues) {
+      const bytes = new Uint8Array(16);
+      c.getRandomValues(bytes);
+      return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    }
   } catch {
     // ignore
   }
 
-  return `fusabase_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+  throw new Error('Unable to generate instance ID: crypto.getRandomValues is unavailable');
 }
 
 /** @internal */

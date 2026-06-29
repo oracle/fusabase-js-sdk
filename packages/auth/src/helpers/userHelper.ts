@@ -25,15 +25,14 @@
 //-----------------------------------------------------------------------------
 // 
 
-import { IDCSConfig, ONPREMConfig } from "./config.js";
+import { ONPREMConfig } from "./config.js";
 import { AuthError, authErrorHandler, ErrorCode, ErrorCodeMessage } from "../errors.js";
 import { IdTokenResult } from "../types/idtoken.js";
-import { Utils, safeStringify, customMod, modPow } from '../util/util.js';
+import { Utils } from '../util/util.js';
 import { LogLevel } from "../../../logger/LogLevel.js";
 import { AuthCredential, EmailAuthCredential } from "../internal/credential.js";
 import { EmailAuthProvider } from "../providers/email.js";
 import { fusabaseFetch } from "../../../app/src/fusabase-fetch.js";
-import type { App } from "../../../app/src/public-types.js";
 
 /**
  * Internal helper class for IDCS user.
@@ -42,414 +41,106 @@ import type { App } from "../../../app/src/public-types.js";
  * @internal
  */
 export class IDCSUserHelper {
+  private delegate: ONPREMUserHelper;
   readonly config: any;
-  private authnToken: string | null;
-  acc_tok: IdTokenResult | null;
-  private encodedSecret: string;
-  user: any;
-  fusabase_token: IdTokenResult | null;
   protected logLevel: LogLevel;
-  private refresh_token: string | null;
 
-  /** @internal */
-  private _app:any;
-  
-
-  /**
-   * Constructs the UserHelper object.
-   * @param config 
-   * @param authnToken 
-   * @param acc_tok 
-   * @param logLevel 
-   */
   constructor(config: any, authnToken: string | null, acc_tok: IdTokenResult, logLevel: LogLevel) {
     this.config = config;
-    this.authnToken = authnToken;
-    this.acc_tok = acc_tok;
-    this.fusabase_token = null;
-    this.refresh_token = null;
-    this.encodedSecret = btoa(
-      `${this.config.clientId}:${this.config.clientSecret}`
-    );
     this.logLevel = logLevel;
-    this._app = null;
+    this.delegate = new ONPREMUserHelper(config, authnToken, acc_tok, logLevel);
+  }
+
+  get acc_tok(): IdTokenResult | null {
+    return this.delegate.acc_tok;
+  }
+
+  set acc_tok(value: IdTokenResult | null) {
+    this.delegate.acc_tok = value;
+  }
+
+  get fusabase_token(): IdTokenResult | null {
+    return this.delegate.fusabase_token;
+  }
+
+  set fusabase_token(value: IdTokenResult | null) {
+    this.delegate.fusabase_token = value;
+  }
+
+  get user(): any {
+    return this.delegate.user;
+  }
+
+  set user(value: any) {
+    this.delegate.user = value;
   }
 
   /** @internal */
   _setApp(app: any): void {
-    this._app = app;
+    this.delegate._setApp(app);
   }
 
-  /**
-   * Utility function to refresh access token.
-   * @param refresh_token 
-   * @returns Refresh Token
-   */
-  async refreshAccessToken(refresh_token: string): Promise<string|null> {
-    let result: any = null;
-    let response: Response | null = null;
-    const reqURL = `${this.config.domainURL}${IDCSConfig.OAUTH_TOKEN_REST_EP}`;
-    const params = {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${this.encodedSecret}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: `grant_type=refresh_token&refresh_token=${refresh_token}&scope=offline_access`,
-    };
-
-    try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      Utils.checkResponse(response);
-      result = await response.json();
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, {}, reqURL, response, result);
-      err.status = response? response.status : 408;
-      err.authType = this.config.authType.toUpperCase();
-      try {
-        var newMessage = await response?.json();
-        err.message = newMessage["detail"];
-      } catch (jsonErr) {
-        err.message = 'Unknown';
-      }
-      throw authErrorHandler(err);
-    }
-
-    this.acc_tok = new IdTokenResult(result.access_token);
-    this.refresh_token = result.refresh_token;
-    return this.refresh_token;
+  async refreshAccessToken(refresh_token: string): Promise<string> {
+    return this.delegate.refreshAccessToken(refresh_token);
   }
 
-  /**
-   * Validates the access token.
-   * @returns true if token is valid else false.
-   */
   validateAccessToken(): boolean {
-    let exp = 0;
-    if (this.acc_tok?.expirationTime) {
-      exp = this.acc_tok?.expirationTime;
-    }
-    if (
-      exp <
-      Math.round(new Date().getTime() / 1000)
-    ) {
-      return false;
-    }
-    return true;
+    return this.delegate.validateAccessToken();
   }
 
-  /**
-   * Validates the access token.
-   * @returns true if token is valid else false.
-   */
-  validateFUSABASEAccessToken(): boolean {
-    if (!this.fusabase_token) {
-      return false;
-    }
-    let exp = 0;
-    if (this.fusabase_token?.expirationTime) {
-      exp = this.fusabase_token?.expirationTime;
-    }
-    if (
-      exp <
-      Math.round(new Date().getTime() / 1000)
-    ) {
-      return false;
-    }
-    return true;
-  }
-
-  /**
-   * Internal method to create operations on update profile.
-   */
   makeOperations(userProfile: any): any[] {
-    let operations: any[] = [];
-    if (
-      Object.hasOwn(userProfile, "displayName") &&
-      userProfile.displayName !== this.user.displayName
-    ) {
-      operations.push({
-        op: this.user.displayName
-          ? userProfile.displayName
-            ? "replace"
-            : "remove"
-          : "add",
-        path: "displayName",
-        value: userProfile.displayName,
-      });
-    }
-
-    if (
-      Object.hasOwn(userProfile, "phoneNumber") &&
-      userProfile.phoneNumber !== this.user.phoneNumber
-    ) {
-      operations.push({
-        op: this.user.phoneNumber
-          ? userProfile.phoneNumber
-            ? "replace"
-            : "remove"
-          : "add",
-        path: "phoneNumbers",
-        value: [{
-          "value": userProfile.phoneNumber,
-          "type": "home"
-        }],
-      });
-    }
-
-    if (
-      Object.hasOwn(userProfile, "photoURL") &&
-      userProfile.photoURL !== this.user.photoURL
-    ) {
-      operations.push({
-        op: this.user.photoURL
-          ? userProfile.photoURL
-            ? "replace"
-            : "remove"
-          : "add",
-        path: "photos",
-        value: [{
-          "value": userProfile.photoURL,
-          "type": "photo"
-        }],
-      });
-    }
-    return operations;
+    return this.delegate.makeOperations(userProfile);
   }
 
-  /**
-   * Helper function to update the user's profile.
-   * @param userProfile 
-   * @param schemas 
-   * @return 
-   */
   async updateProfile(userProfile: any): Promise<any> {
-    let result: any = null;
-    let response: Response | null = null;
-    const reqURL = `${this.config.domainURL}${IDCSConfig.SELF_ME_REST_EP}`;
-    let body = {
-      schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-      Operations: this.makeOperations(userProfile),
-    };
-    const params = {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/scim+json",
-        Authorization: `Bearer ${await this.user.getIdToken()}`,
-      },
-      body: JSON.stringify(body),
-    };
-
-    try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      Utils.checkResponse(response);
-      result = await response.json();
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, params, reqURL, response, result);
-      err.status = response? response.status : 408;
-      err.authType = this.config.authType.toUpperCase();
-      try {
-        var newMessage = await response?.json();
-        err.message = newMessage["detail"];
-      } catch (jsonErr) {
-        err.message = 'Unknown';
-      }
-      throw authErrorHandler(err);
-    }
-
-    return result;
+    return this.delegate.updateProfile(userProfile);
   }
 
-  /**
-   * Updates the user's password.
-   * @param email 
-   * @param newPassword 
-   * @param oldPassword 
-   * @return 
-   */
-  async updatePasswordHelper(email: string, newPass: string, oldPass: string): Promise<any> {
-    let response: Response | null = null;
-    let result: any = null;
-    const reqURL = `${this.config.domainURL}${IDCSConfig.UPDATE_PASSWORD_HELPER}`;
-    const data = {
-      password: newPass,
-      oldPassword: oldPass,
-      schemas: [
-        "urn:ietf:params:scim:schemas:oracle:idcs:MePasswordChanger"
-      ]
-    };
-    const params = {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${this.acc_tok?.token}`,
-        "Content-Type": "application/scim+json",
-      },
-      body: JSON.stringify(data),
-    };
-
-    try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      Utils.checkResponse(response);
-      result = await response.json();
-      return result;
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, {}, reqURL, response, result);
-      err.status = response? response.status : 408;
-      err.authType = this.config.authType.toUpperCase();
-      try {
-        var newMessage = await response?.json();
-        err.message = newMessage["detail"];
-      } catch (jsonErr) {
-        err.message = 'Unknown';
-      }
-      throw authErrorHandler(err);
-    }
+  async updatePasswordHelper(email: string, newPassword: string, oldPassword: string): Promise<void> {
+    return this.delegate.updatePasswordHelper(email, newPassword, oldPassword);
   }
 
   async sendEmailVerificationHelper(email: string, id: string): Promise<void> {
-    let response: Response | null = null;
-    const reqURL = `${this.config.domainURL}${IDCSConfig.SEND_EMAIL_VERIFICATION}`;
-    const data = {
-      id: id,
-      email: email,
-      schemas: ["urn:ietf:params:scim:schemas:oracle:idcs:MeEmailVerifier"],
-      meta: {
-        "resourceType": "MeEmailVerifier"
-      }
-    };
-    const params = {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${this.acc_tok?.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
-    };
-
-    try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      Utils.checkResponse(response);
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, params, reqURL, response);
-      err.status = response? response.status : 408;
-      err.authType = this.config.authType.toUpperCase();
-      try {
-        var newMessage = await response?.json();
-        err.message = newMessage["detail"];
-      } catch (jsonErr) {
-        err.message = 'Unknown';
-      }
-      throw authErrorHandler(err);
-    }
+    return this.delegate.sendEmailVerificationHelper(email, id);
   }
 
-  async fetchFusabaseToken(url:any, app: any) : Promise<string> {
-    let response = null
-    let result = null
-    const reqURL =
-      url;
-    const data = {
-      token: this.acc_tok?.token
-    }
-    const params = {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
-    };
-
-    try {
-      response = await fusabaseFetch(app, reqURL, params);
-      Utils.checkResponse(response);
-      result = await response.json();
-      return result.access_token;
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, params, reqURL, response);
-      err.status = response? response.status : 408;
-      err.authType = this.config.authType.toUpperCase();
-      try {
-        var newMessage = await response?.json();
-        err.message = newMessage["detail"];
-      }
-      catch (jsonErr) {
-        /* response is not JSON text */
-        err.message = 'Unknown';
-      }
-      throw authErrorHandler(err);
-    }
+  validateFUSABASEAccessToken(): boolean {
+    return this.delegate.validateFUSABASEAccessToken();
   }
 
-  async linkWithCredentialHelper(credential: any): Promise<never> {
-    const err: any = new Error(
-      "Method is not supported in IDCS authentication"
-    );
-    err.status = ErrorCode.NOT_IMPLEMENT;
-    err.authType = "IDCS";
-    throw authErrorHandler(err);
+  fetchFusabaseToken(url:any, app: any) {
+    return this.delegate.fetchFusabaseToken(url, app);
   }
 
-  async socialLink(url: string): Promise<any> {
-    const err: any = new Error(
-      "Method is not supported in IDCS authentication"
-    );
-    err.status = ErrorCode.NOT_IMPLEMENT;
-    err.authType = "IDCS";
-    throw authErrorHandler(err);
+  async linkWithCredentialHelper(credential: AuthCredential): Promise<any> {
+    return this.delegate.linkWithCredentialHelper(credential);
   }
 
-  async listenForSuccess(popupWindow: any): Promise<any> {
-    return new Promise((resolve) => {
-      const controller = new AbortController();
-
-      const handler = (event: MessageEvent) => {
-        if (event.source !== popupWindow) return;
-
-        try {
-          const parsed = JSON.parse(event.data);
-          Utils.baasLogger(this.logLevel, event.data);
-          controller.abort(); // stop listening
-          resolve(parsed);
-        } catch {
-          // ignore non-JSON messages
-        }
-      };
-
-      window.addEventListener("message", handler, {
-        signal: controller.signal,
-      });
-    });
+  async socialLink(url: string): Promise<{ idToken: string }> {
+    return this.delegate.socialLink(url);
   }
 
-  async unlinkHelper(providerId: any): Promise<never> {
-    const err: any = new Error(
-      "Method is not supported in IDCS authentication"
-    );
-    err.status = ErrorCode.NOT_IMPLEMENT;
-    err.authType = "IDCS";
-    throw authErrorHandler(err);
+  async listenForAuthToken(popupWindow: Window): Promise<any> {
+    return this.delegate.listenForAuthToken(popupWindow);
+  }
+
+  async unlinkHelper(providerId: string): Promise<any> {
+    return this.delegate.unlinkHelper(providerId);
   }
 
   generateCodeVerifier(length = 96): string {
-    const array = new Uint8Array(length);
-    crypto.getRandomValues(array);
-    return this.base64UrlEncode(array);
+    return this.delegate.generateCodeVerifier(length);
   }
 
   base64UrlEncode(arrayBuffer: Uint8Array): string {
-    return btoa(String.fromCharCode(...arrayBuffer))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+    return this.delegate.base64UrlEncode(arrayBuffer);
   }
 
   async generateCodeChallenge(codeVerifier: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(codeVerifier);
-    const digest = await crypto.subtle.digest('SHA-256', data);
-    return this.base64UrlEncode(new Uint8Array(digest));
+    return this.delegate.generateCodeChallenge(codeVerifier);
   }
 }
+
 
 /**
  * Internal helper class for onprem user.
@@ -734,7 +425,7 @@ export class ONPREMUserHelper {
     return true;
   }
 
-  async fetchFusabaseToken(url:any, app: any) {
+  fetchFusabaseToken(url:any, app: any) {
     return this.acc_tok?.token;
   }
 

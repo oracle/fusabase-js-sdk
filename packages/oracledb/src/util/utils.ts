@@ -183,10 +183,16 @@ export function getHostString(
   host: string,
   token?: string
 ): string {
+  let socketHost = String(host).trim().replace(/[?#].*$/, "");
+  socketHost = socketHost.endsWith("/")
+    ? socketHost.slice(0, socketHost.length - 1)
+    : socketHost;
+
+  const url = new URL(`${ssl ? "wss" : "ws"}://${socketHost}`);
   if (token && token !== "") {
-    host = host.slice(0, host.length - 1) + "?authToken=" + token;
+    url.searchParams.set("authToken", token);
   }
-  return ssl ? "wss://" + host : "ws://" + host;
+  return url.toString();
 }
 
 /**
@@ -1022,7 +1028,7 @@ export class Utils {
       "signature",
       "codeverifier",
       "apikey",
-      "appchecktoken",
+      "apptrusttoken",
     ].includes(normalizedKey);
   }
 
@@ -1042,8 +1048,8 @@ export class Utils {
 
     return value
       .replace(/(authorization\s*[:=]\s*)(bearer|basic)\s+[^&\s,"'}]+/gi, `$1$2 ${Utils.LOG_REDACTION}`)
-      .replace(/(\b(?:access_token|refresh_token|id_token|idToken|authnToken|authToken|token|assertion|password|client_secret|clientSecret|apiKey|appCheckToken|code_verifier|codeVerifier)\b\s*[:=]\s*)[^&\s,"'}]+/gi, `$1${Utils.LOG_REDACTION}`)
-      .replace(/([?&](?:access_token|refresh_token|id_token|authToken|token|assertion|password|client_secret|apiKey|appCheckToken|code|code_verifier)=)[^&#\s]+/gi, `$1${Utils.LOG_REDACTION}`)
+      .replace(/(\b(?:access_token|refresh_token|id_token|idToken|authnToken|authToken|token|assertion|password|client_secret|clientSecret|apiKey|appTrustToken|code_verifier|codeVerifier)\b\s*[:=]\s*)[^&\s,"'}]+/gi, `$1${Utils.LOG_REDACTION}`)
+      .replace(/([?&](?:access_token|refresh_token|id_token|authToken|token|assertion|password|client_secret|apiKey|appTrustToken|code|code_verifier)=)[^&#\s]+/gi, `$1${Utils.LOG_REDACTION}`)
       .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, Utils.LOG_REDACTION);
   }
 

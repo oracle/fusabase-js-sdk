@@ -34,7 +34,7 @@ import { App } from "fusabase/app";
  */
 export declare function initializeOracledb(
   app: App,
-  settings: OracledbSettings,
+  settings?: OracledbSettings,
   databaseId?: string
 ): oracledb;
 

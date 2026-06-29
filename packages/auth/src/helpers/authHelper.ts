@@ -30,444 +30,93 @@ import { IDCSConfig, ONPREMConfig } from "./config.js";
 import { Utils } from "../util/util.js";
 import { AuthError, ErrorCode, authErrorHandler, ErrorCodeMessage, getErrorMessage } from "../errors.js";
 import { IdTokenResult } from "../types/idtoken.js";
-import { convertIatToTimestamp, convertOCITimeToTimestampString, modPow, customMod, safeStringify } from '../util/util.js'
-import { User } from "../types/user.js";
+import { convertIatToTimestamp } from '../util/util.js'
 import { fusabaseFetch } from '../../../app/src/fusabase-fetch.js';
-import type { App } from '../../../app/src/public-types.js';
 /**
  * Internal Helper class for Auth for IDCS.
+ * Mirrors the base/onprem helper; the IDCS config supplies the idcs URL segment.
  */
 /**
  * @internal
  */
 export class IDCSAuthHelper {
-
-  config: any;
-  encodedSecret: string | null;
-  bearerToken: IdTokenResult | null;
+  private delegate: ONPREMAuthHelper;
+  config: IDCSConfig;
   logLevel: LogLevel;
   ordsHostOrigin: string;
-  /** @internal */
-  private _app:any;
 
-  /**
-   * Constructs the AuthHelper.
-   * @param {any} config - Configuration data
-   * @param {LogLevel} logLevel
-   */
-  constructor(config: any, logLevel: LogLevel, ordsHostOrigin?: string) {
+  /** @internal */
+  private _app: any;
+
+  constructor(config: IDCSConfig, logLevel: LogLevel, ordsHostOrigin?: string) {
     this.config = config;
-    this.encodedSecret = btoa(`${this.config.clientId}:${this.config.clientSecret}`);
-    this.bearerToken = null;
     this.logLevel = logLevel;
     this.ordsHostOrigin = ordsHostOrigin ?? "";
+    this.delegate = new ONPREMAuthHelper(config, logLevel, ordsHostOrigin);
     this._app = null;
   }
 
   /** @internal */
-  _setApp(app:any) {
+  _setApp(app: any): void {
     this._app = app;
+    this.delegate._setApp(app);
   }
-
-
-  /**
-   * @async
-   * @property {Function} getBearerToken 
-   * Fetches Bearer Token from IDCS.
-   * @returns {Promise<IdToken>} Bearer Token
-   */
-  async getBearerToken(): Promise<IdTokenResult> {
-    let response: Response | null = null;
-    let result: any = null;
-    const reqURL = `${this.config.domainURL}${IDCSConfig.OAUTH_TOKEN_REST_EP}`;
-    const params = {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${this.encodedSecret}`,
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-      },
-      body: "grant_type=client_credentials&scope=urn:opc:idm:__myscopes__",
-    };
-
-    try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      if (!response) throw new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('FAILED_FETCH', 'bearer token'));
-      Utils.checkResponse(response);
-      result = await response.json();
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, {}, reqURL, response, result);
-      err.status = response? response.status : 408;
-      err.authType = this.config.authType.toUpperCase();
-      if (response) {
-        try {
-          const newMessage = await response.json();
-          err.message = newMessage["detail"] || 'Unknown error';
-        } catch (jsonErr) {
-          err.message = 'Unknown';
-        }
-      } else {
-        err.message = 'Network error';
-      }
-      throw authErrorHandler(err);
-    }
-
-    this.bearerToken = new IdTokenResult(result.access_token);
-    return this.bearerToken;
-  }
-
-  /**
-   * @property {Function} getAuthForm 
-   * Fetches Auth Form for credSubmit operation for Authentication process.
-   * @async
-   * @param {IdToken} bearerToken
-   * @returns {Promise<object>} Auth Form
-   */
-  async getAuthForm(bearerToken: IdTokenResult): Promise<any> {
-    let form: Response | null = null;
-    let formResult: any = null;
-    const reqURL = `${this.config.domainURL}${IDCSConfig.AUTHENTICATE_REST_EP}`;
-    const params = {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${bearerToken.token}`,
-      },
-    };
-
-    try {
-      form = await fusabaseFetch(this._app,reqURL, params);
-      if (!form) throw new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('FAILED_FETCH', 'auth form'));
-      Utils.checkResponse(form);
-      formResult = await form.json();
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, params, reqURL, form, formResult);
-      err.status = form?.status || 500;
-      err.authType = this.config.authType.toUpperCase();
-      if (form) {
-        try {
-          const newMessage = await form.json();
-          err.message = newMessage["detail"] || 'Unknown error';
-        } catch (jsonErr) {
-          err.message = 'Unknown';
-        }
-      } else {
-        err.message = 'Network error';
-      }
-      throw authErrorHandler(err);
-    }
-
-    return formResult;
-  }
-
-  /**
-   * @async
-   * @property {Function} authenticateAndGetDetails 
-   * @param {String} email
-   * @param {String} password
-   * Authenticates a user with IDCS with given email and password.
-   * @returns {Promise<Object>} Returns a promise that resolves into an object of user details and tokens.
-   */
   async authenticateAndGetDetails(email: string, password: string): Promise<any> {
-    const authnToken = await this.authenticateUser(email, password);
-    const tokens = await this.getAccessToken(authnToken);
-    const userDetails = await this.getUserDetails(tokens.access_token);
-    return {
-      userDetails,
-      authnToken,
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-    };
+    return this.delegate.authenticateAndGetDetails(email, password);
   }
 
-  /**
-   * @async
-   * @property {Function} authenticateUser 
-   * @param {String} email
-   * @param {String} password
-   * Authenticates a user with IDCS with given email and password.
-   * @returns {Promise<IdToken>} Authentication Token
-   */
-  async authenticateUser(email: string, password: string): Promise<IdTokenResult> {
-    let formResult: any = null;
-    let response: Response | null = null;
-    let result: any = null;
-    const bearerToken = this.bearerToken?.token ? this.bearerToken : await this.getBearerToken();
-    formResult = await this.getAuthForm(bearerToken);
-
-    const reqURL = `${this.config.domainURL}${IDCSConfig.AUTHENTICATE_REST_EP}`;
-    const params = {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${bearerToken.token}`,
-      },
-      body: JSON.stringify({
-        op: "credSubmit",
-        credentials: {
-          username: email,
-          password,
-        },
-        requestState: formResult.requestState,
-      }),
-    };
-
-    try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      if (!response) throw new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('FAILED_OPERATION', 'authenticate user'));
-      Utils.checkResponse(response);
-      result = await response.json();
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, {}, reqURL, response, result);
-      err.status = response? response.status : 408;
-      err.authType = this.config.authType.toUpperCase();
-      if (response) {
-        try {
-          const newMessage = await response.json();
-          err.message = newMessage["detail"] || 'Unknown error';
-        } catch (jsonErr) {
-          err.message = 'Unknown';
-        }
-      } else {
-        err.message = 'Network error';
-      }
-      throw authErrorHandler(err);
-    }
-
-    return new IdTokenResult(result.authnToken);
+  async authenticateUser(email: string, password: string): Promise<any> {
+    return this.delegate.authenticateUser(email, password);
   }
+
 
   async reloadUser(user: any): Promise<any> {
-    const access_token = await user.getIdTokenResult(true);
-    return this.getUserDetails(access_token);
+    return this.delegate.reloadUser(user);
   }
 
-
-  /**
-  * @async
-  * @property {Function} getAccessToken 
-  * Fetches access & refresh token for the authenticated user.
-  * @param {IdToken} authnToken
-  * @returns {Promise<any>} Access & Refresh Tokens
-  */
-  async getAccessToken(authnToken: IdTokenResult): Promise<any> {
-    let response: Response | null = null;
-    let result: any = null;
-    const reqURL = `${this.config.domainURL}${IDCSConfig.OAUTH_TOKEN_REST_EP}`;
-    const params = {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${this.encodedSecret}`,
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-      },
-      body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&scope=urn:opc:idm:__myscopes__+offline_access&assertion=${authnToken.token}`,
-    };
-
-    try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      if (!response) throw new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('FAILED_FETCH', 'access token'));
-      Utils.checkResponse(response);
-      result = await response.json();
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, {}, reqURL, response, result);
-      err.status = response? response.status : 408;
-      err.authType = this.config.authType.toUpperCase();
-      if (response) {
-        try {
-          const newMessage = await response.json();
-          err.message = newMessage["detail"] || 'Unknown error';
-        } catch (jsonErr) {
-          err.message = 'Unknown';
-        }
-      } else {
-        err.message = 'Network error';
-      }
-      throw authErrorHandler(err);
-    }
-
-    return {
-      access_token: new IdTokenResult(result.access_token),
-      refresh_token: result.refresh_token,
-    };
-  }
-
-  async reload(user: User): Promise<void> {
-    const access_token = await user.getIdTokenResult(true);
-    return this.getUserDetails(access_token ? access_token : undefined);
-  }
-
-  /**
-   * @async
-   * @property {Function} getUserDetails 
-   * Fetches the detail of the authenticated user.
-   * @param {IdToken} access_token
-   * @returns {Promise<object>} User Details
-   */
   async getUserDetails(access_token?: IdTokenResult): Promise<any> {
-    const token_data = Utils.parseJWT(access_token?.token ?? "");
-    let response: Response | null = null;
-    let result: any = null;
-    const reqURL = `${this.config.domainURL}${IDCSConfig.SELF_ME_REST_EP}`;
-    const params = {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${access_token?.token}`,
-        "Content-Type": "application/scim+json",
-      },
-    };
-
-    try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      if (!response) throw new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('FAILED_FETCH', 'user details'));
-      Utils.checkResponse(response);
-      result = await response.json();
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, params, reqURL, response, result);
-      err.status = response? response.status : 408;
-      err.authType = this.config.authType.toUpperCase();
-      if (response) {
-        try {
-          const newMessage = await response.json();
-          err.message = newMessage["detail"] || 'Unknown error';
-        } catch (jsonErr) {
-          err.message = 'Unknown';
-        }
-      } else {
-        err.message = 'Network error';
-      }
-      throw authErrorHandler(err);
-    }
-    if (token_data && result) {
-      result["emailVerified"] = token_data["email_verified"];
-      if (result["meta"]) {
-        result["meta"]["lastSignIn"] = convertIatToTimestamp(token_data["iat"]);
-        result["meta"]["created"] = convertOCITimeToTimestampString(result["meta"]["created"]);
-      }
-      result["idp_name"] = token_data["idp_name"];
-      result["idp_type"] = token_data["idp_type"];
-    }
-    return result;
+    return this.delegate.getUserDetails(access_token);
   }
 
-  /**
-   * @async
-   * @property {Function} registerUser
-   * Registers a user in IDCS. 
-   * @param {String} email 
-   * @param {String} password 
-   * @returns {Promise<Object>} Check this ??  
-   */
   async registerUser(email: string, password: string, url:string): Promise<any> {
-    const bearerToken = this.bearerToken?.token ? this.bearerToken : await this.getBearerToken();
+    return this.delegate.registerUser(email, password, url);
+  }
 
-    const data = {
-      email: email,
-      first_name: "-",
-      last_name: "-",
-      password: password,
-    };
+  base64UrlEncode(arrayBuffer: Uint8Array): string {
+    return this.delegate.base64UrlEncode(arrayBuffer);
+  }
 
-    let userData: Response | null = null;
-    let dataJSON: any = {};
-    const reqURL = url;
-    const params = {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${bearerToken.token}`,
-        "Content-Type": "application/scim+json",
-      },
-      body: JSON.stringify(data),
-    };
+  generateCodeVerifier(length = 96): string {
+    return this.delegate.generateCodeVerifier(length);
+  }
 
-    try {
-      userData = await fusabaseFetch(this._app,reqURL, params);
-      if (!userData) throw new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('FAILED_OPERATION', 'register user'));
-      Utils.checkResponse(userData);
-      // dataJSON = await userData.json();
-      return dataJSON;
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, {}, reqURL, userData, dataJSON);
-      err.status = userData?.status || 500;
-      err.authType = this.config.authType.toUpperCase();
-      if (userData) {
-        try {
-          const newMessage = await userData.json();
-          err.message = newMessage["detail"] || 'Unknown error';
-        } catch (jsonErr) {
-          err.message = 'Unknown';
-        }
-      } else {
-        err.message = 'Network error';
-      }
-      throw authErrorHandler(err);
-    }
+  async generateCodeChallenge(codeVerifier: string): Promise<string> {
+    return this.delegate.generateCodeChallenge(codeVerifier);
+  }
+
+  async getRedirectCredentials(code: string, url: string): Promise<any> {
+    return this.delegate.getRedirectCredentials(code, url);
   }
 
   async socialLogin(url: string): Promise<any> {
-    const popup = window.open("", "name", "width=800,height=600");
-    if (popup) {
-      popup.location.href = url;
-      const data = await this.listenForAuthToken(popup);
-      popup.close();
+    return this.delegate.socialLogin(url);
+  }
 
-      return {
-        authnToken: undefined,
-        tokens: {
-          access_token: new IdTokenResult(data.access_token),
-          refresh_token: data.refresh_token
-        }
-      };
-    } else {
-      throw new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('POPUP_BLOCKED_SIMPLE'));
+  async listenForAuthToken(popupWindow: any): Promise<any> {
+    return this.delegate.listenForAuthToken(popupWindow);
+  }
+
+  async performSignOut(refresh_token: string): Promise<void> {
+    try {
+      await this.delegate.performSignOut(refresh_token);
+    } finally {
+      await this.signOutFromIDCS();
     }
   }
 
-  /**
-   * @async
-   * @property {Function} listenForAuthToken
-   * Listens to Auth token from pop up window.
-   * @param {} popupWindow
-   * @returns {Promise<IdToken>} 
-   */
-  async listenForAuthToken(popupWindow: any): Promise<any> {
-    return new Promise((resolve, reject) => {
-      const controller = new AbortController();
-      const expectedOrigin = this.ordsHostOrigin;
-      const providerAuthToken = (event: MessageEvent) => {
-        if (event.source !== popupWindow) return;
-        if (event.origin !== expectedOrigin) return;
-        try {
-          const data = JSON.parse(event.data);
-          controller.abort();
-          resolve(data);
-        } catch (err) {
-          reject(err);
-        }
-      };
-      window.addEventListener("message", providerAuthToken, { signal: controller.signal });
-    });
-  }
-
-  /**
-   * @async
-   * @property {Function} performSignOut 
-   * Signs out a user from IDCS and revokes the refresh token.
-   * @param {String} refresh_token
-   * @returns {Promise<void>} 
-   */
-  async performSignOut(refresh_token: string): Promise<void> {
-    await this.signOutFromIDCS();
-    await this.revokeRefreshToken(refresh_token);
-  }
-
-  /**
- * @async
- * @property {Function} signOutFromIDCS 
- * Signs out a user from IDCS.
- * @returns {Promise<void>} 
- */
   async signOutFromIDCS(): Promise<void> {
     let response: Response | null = null;
-    const reqURL = `${this.config.domainURL}${IDCSConfig.LOGOUT_REST_EP}`;
+    const reqURL = `${this.config.idcsDomainURL}${IDCSConfig.LOGOUT_REST_EP}`;
     const params = {
       method: "GET",
       headers: {
@@ -476,8 +125,10 @@ export class IDCSAuthHelper {
     };
 
     try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      if (!response) throw new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('FAILED_OPERATION', 'sign out from IDCS'));
+      response = await fusabaseFetch(this._app, reqURL, params);
+      if (!response) {
+        throw new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('FAILED_OPERATION', 'sign out from IDCS'));
+      }
       Utils.checkResponse(response);
     } catch (err: any) {
       Utils.baasTrace(this.logLevel, params, reqURL, response);
@@ -497,258 +148,27 @@ export class IDCSAuthHelper {
     }
   }
 
-  /**
-   * @async
-   * @property {Function} revokeRefreshToken 
-   * Revokes the provided refresh token.
-   * @param {String} refresh_token
-   * @returns {Promise<void>} 
-   */
   async revokeRefreshToken(refresh_token: string): Promise<void> {
-    let response: Response | null = null;
-    const reqURL = `${this.config.domainURL}${IDCSConfig.REVOKE_REFRESH_TOKEN_REST_EP}`;
-    const params = {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${this.encodedSecret}`,
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        Accept: "*/*",
-      },
-      body: `token=${refresh_token}`,
-    };
-
-    try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      if (!response) throw new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('FAILED_OPERATION', 'revoke refresh token'));
-      Utils.checkResponse(response);
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, {}, reqURL, response);
-      err.status = response? response.status : 408;
-      err.authType = this.config.authType.toUpperCase();
-      if (response) {
-        try {
-          const newMessage = await response.json();
-          err.message = newMessage["detail"] || 'Unknown error';
-        } catch (jsonErr) {
-          err.message = 'Unknown';
-        }
-      } else {
-        err.message = 'Network error';
-      }
-      throw authErrorHandler(err);
-    }
+    return this.delegate.revokeRefreshToken(refresh_token);
   }
 
-  /**
-* @async
-* @property {Function} sendPasswordResetEmailHelper
-* Helper function sendPasswordResetEmail.
-* @param {String} email
-* @returns {Promise<void>} 
-*/
   async sendPasswordResetEmailHelper(email: string): Promise<void> {
-    let response: Response | null = null;
-    const bearerToken = this.bearerToken?.token ? this.bearerToken : await this.getBearerToken();
-    const email_domain = email.split('@')[1];
-
-    const data = {
-      userName: email,
-      notificationType: "email",
-      notificationEmailAddress: `****@${email_domain}`,
-      schemas: [
-        "urn:ietf:params:scim:schemas:oracle:idcs:MePasswordResetRequestor"
-      ]
-    };
-    const reqURL = `${this.config.domainURL}${IDCSConfig.SEND_PASSWORD_RESET_EMAIL}`;
-    const params = {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${bearerToken.token}`,
-        "Content-Type": "application/scim+json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify(data),
-    };
-
-    try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      if (!response) throw new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('FAILED_OPERATION', 'send password reset email'));
-      Utils.checkResponse(response);
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, {}, reqURL, response);
-      err.status = response? response.status : 408;
-      err.authType = this.config.authType.toUpperCase();
-      if (response) {
-        try {
-          const newMessage = await response.json();
-          err.message = newMessage["detail"] || 'Unknown error';
-        } catch (jsonErr) {
-          err.message = 'Unknown';
-        }
-      } else {
-        err.message = 'Network error';
-      }
-      throw authErrorHandler(err);
-    }
+    return this.delegate.sendPasswordResetEmailHelper(email);
   }
 
-  /**
-* @async
-* @property {Function} verifyPasswordResetCodeHelper
-* Helper function verifyPasswordResetCode.
-* @param {String} token
-* @returns {Promise<Object>} 
-*/
-  async verifyPasswordResetCodeHelper(token: string): Promise<any> {
-    let response: Response | null = null;
-    let result: any = null;
-    const bearerToken = this.bearerToken?.token ? this.bearerToken : await this.getBearerToken();
-    const data = {
-      token,
-      schemas: [
-        "urn:ietf:params:scim:schemas:oracle:idcs:UserTokenValidator"
-      ]
-    };
-    const reqURL = `${this.config.domainURL}${IDCSConfig.VERIFY_PASSWORD_RESET_CODE}`;
-    const params = {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${bearerToken.token}`,
-        "Content-Type": "application/scim+json",
-      },
-      body: JSON.stringify(data),
-    };
-
-    try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      if (!response) throw new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('FAILED_OPERATION', 'verify password reset code'));
-      Utils.checkResponse(response);
-      result = await response.json();
-      return result.userName;
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, {}, reqURL, response, result);
-      err.status = response? response.status : 408;
-      err.authType = this.config.authType.toUpperCase();
-      if (response) {
-        try {
-          const newMessage = await response.json();
-          err.message = newMessage["detail"] || 'Unknown error';
-        } catch (jsonErr) {
-          err.message = 'Unknown';
-        }
-      } else {
-        err.message = 'Network error';
-      }
-      throw authErrorHandler(err);
-    }
+  async verifyPasswordResetCodeHelper(code: string): Promise<any> {
+    return this.delegate.verifyPasswordResetCodeHelper(code);
   }
 
-  /**
-   * @async
-   * @property {Function} confirmPasswordResetHelper
-   * Helper function verifyPasswordResetCode.
-   * @param {String} token
-   * @param {String} newPassword
-   * @returns {Promise<void>} 
-   */
   async confirmPasswordResetHelper(code: string, newPass: string, email: string): Promise<any> {
-    let response: Response | null = null;
-    const bearerToken = this.bearerToken?.token ? this.bearerToken : await this.getBearerToken();
-    const reqURL = `${this.config.domainURL}${IDCSConfig.CONFIRM_PASSWORD_RESET}`;
-
-    const data = {
-      token: code,
-      password: newPass,
-      schemas: [
-        "urn:ietf:params:scim:schemas:oracle:idcs:MePasswordResetter"
-      ]
-    };
-    const params = {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${bearerToken.token}`,
-        "Content-Type": "application/scim+json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify(data),
-    };
-
-    try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      if (!response) throw new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('FAILED_OPERATION', 'confirm password reset'));
-      Utils.checkResponse(response);
-    } catch (err: any) {
-      Utils.baasTrace(this.logLevel, {}, reqURL, response);
-      err.status = response? response.status : 408;
-      err.authType = this.config.authType.toUpperCase();
-      if (response) {
-        try {
-          const newMessage = await response.json();
-          err.message = newMessage["detail"] || 'Unknown error';
-        } catch (jsonErr) {
-          err.message = 'Unknown';
-        }
-      } else {
-        err.message = 'Network error';
-      }
-      throw authErrorHandler(err);
-    }
+    return this.delegate.confirmPasswordResetHelper(code, newPass, email);
   }
 
-  async signInWithCredentialHelper(credential: any): Promise<never> {
-    const err = new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('METHOD_NOT_SUPPORTED_IDCS'));
-    err.status = ErrorCode.NOT_IMPLEMENT;
-    err.authType = this.config.authType.toUpperCase();
-    throw authErrorHandler(err);
+  async signInWithCredentialHelper(credential: any): Promise<any> {
+    return this.delegate.signInWithCredentialHelper(credential);
   }
-
-  generateCodeVerifier(length = 96): string {
-    const array = new Uint8Array(length);
-    crypto.getRandomValues(array);
-    return this.base64UrlEncode(array);
-  }
-
-  base64UrlEncode(arrayBuffer: Uint8Array): string {
-    return btoa(String.fromCharCode(...arrayBuffer))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-  }
-
-   async generateCodeChallenge(codeVerifier: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(codeVerifier);
-    const digest = await crypto.subtle.digest('SHA-256', data);
-    return this.base64UrlEncode(new Uint8Array(digest));
-  }
-
-  async getRedirectCredentials(code: string, url:string): Promise<any> {
-    let response = null;
-    let result = null;
-    const codeVerifier = localStorage.getItem("codeVerifier");
-    const reqURL = url;
-
-    const params = {
-      method: "POST",
-      body: JSON.stringify({
-        "code_verifier": codeVerifier,
-        "code": code
-      })
-    };
-
-    try {
-      response = await fusabaseFetch(this._app,reqURL, params);
-      Utils.checkResponse(response);
-      result = response.json();
-      //Utils.baasLogger(this.#logLevel, "Fetched response ", result);
-      return result;
-    } catch (err) {
-      //Utils.baasLogger(this.#logLevel, "Error occured in getting creds", err);
-    }
-  }
-
 }
+
 
 /**
  * Internal helper class for Auth for Onprem.
@@ -774,13 +194,6 @@ export class ONPREMAuthHelper {
   /** @internal */
   _setApp(app: any): void {
     this._app = app;
-  }
-
-  async getAuthForm(bearerToken: IdTokenResult): Promise<any> {
-    let err = new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('METHOD_NOT_SUPPORTED_ONPREM'));
-    err.status = ErrorCode.NOT_IMPLEMENT;
-    err.authType = this.config.authType.toUpperCase();
-    throw authErrorHandler(err);
   }
 
   async authenticateAndGetDetails(email: string, password: string): Promise<any> {
@@ -835,13 +248,6 @@ export class ONPREMAuthHelper {
       }
       throw authErrorHandler(err);
     }
-  }
-
-  async getAccessToken(authnToken: IdTokenResult): Promise<never> {
-    let err = new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('METHOD_NOT_SUPPORTED_BASE_LDAP'));
-    err.status = ErrorCode.NOT_IMPLEMENT;
-    err.authType = this.config.authType.toUpperCase();
-    throw authErrorHandler(err);
   }
 
   async reloadUser(user: any): Promise<any> {
@@ -1003,12 +409,6 @@ export class ONPREMAuthHelper {
 
   async performSignOut(refresh_token: string): Promise<void> {
     await this.revokeRefreshToken(refresh_token);
-  }
-
-  async signOutFromIDCS(): Promise<never> {
-    let err = new AuthError(ErrorCodeMessage.UNKNOWN, getErrorMessage('METHOD_NOT_SUPPORTED_BASE_LDAP'));
-    err.status = 501;
-    throw authErrorHandler(err);
   }
 
   async revokeRefreshToken(refresh_token: string): Promise<void> {

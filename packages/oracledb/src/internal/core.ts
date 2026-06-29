@@ -45,19 +45,85 @@ import { SnapshotMetadata } from "../listener/snapshot.js";
 import { QuerySnapshot } from "../collection/snapshot.js";
 import { DocumentData } from "../types/common.js";
 import { BulkUpdate } from "../transaction/bulk.js";
+import {
+  DEFAULT_LONG_POLLING_TIMEOUT_SECONDS,
+  MAX_REALTIME_MESSAGE_QUEUE_BYTES,
+  MAX_REALTIME_MESSAGE_QUEUE_COUNT,
+  normalizeLongPollingOptions,
+  type LongPollingOptions
+} from "./settings.js";
+
+const DISALLOWED_REALTIME_SETTINGS = ["host", "ssl"] as const;
+
+function buildRealtimeEndpoint(ordsHost: string): { host: string; ssl: boolean } {
+  const [scheme, hostWithPath = ""] = ordsHost.split("://");
+  const schemaName = hostWithPath.split("ords")[1] ?? "";
+  const hostPrefix = hostWithPath.split("ords")[0] ?? "";
+
+  return {
+    host: `${hostPrefix}ords/baas-realtime${schemaName}`,
+    ssl: scheme !== "http"
+  };
+}
+
+function rejectRealtimeEndpointOverrides(settings: Record<string, unknown>): void {
+  for (const key of DISALLOWED_REALTIME_SETTINGS) {
+    if (Object.prototype.hasOwnProperty.call(settings, key)) {
+      const error = new Error(
+        "Oracledb realtime host and SSL settings cannot be changed at runtime."
+      ) as Error & { status?: number };
+      error.status = 400;
+      throw oracledbErrorHandler(error);
+    }
+  }
+}
+
+function normalizeRuntimeLongPollingOptions(
+  options: LongPollingOptions | undefined,
+  fallbackTimeoutSeconds = DEFAULT_LONG_POLLING_TIMEOUT_SECONDS
+): { timeoutSeconds: number } {
+  try {
+    return normalizeLongPollingOptions(options, fallbackTimeoutSeconds);
+  } catch (err) {
+    throw oracledbErrorHandler(err);
+  }
+}
+
+function getMessageByteLength(message: string): number {
+  if (typeof TextEncoder !== "undefined") {
+    return new TextEncoder().encode(message).length;
+  }
+
+  return message.length;
+}
+
+function createRealtimeQueueError(message: string): Error & { status?: number } {
+  const error = new Error(message) as Error & { status?: number };
+  error.status = 400;
+  return error;
+}
+
+function createRealtimeSocketError(message: string): Error & { status?: number } {
+  const error = new Error(message) as Error & { status?: number };
+  error.status = 408;
+  return error;
+}
 
 export class Oracledb {
   #conn: DBConn | null = null;
   #snapStore: SnapshotStorage | undefined;
   connection: WebSocket | null = null;
   #bundleStore: any;
+  readonly #realtimeHost: string;
+  readonly #realtimeSsl: boolean;
   private eventManager: EventTarget | undefined;
   name: string | undefined;
   /** @internal */  __snaps: Record<string, any> = {};
   /** @internal */  __callbacks: Record<string, any> = {};
   /** @internal */  __listening: number = 0;
-  /** @internal */  __messageQueue: any[] = [];
+  /** @internal */  __messageQueue: string[] = [];
   /** @internal */  __queryIdMap: Record<string, any> = {};
+  private __messageQueueBytes = 0;
 
   /** @internal */  __listenerKey: string;
   app: App;
@@ -68,21 +134,20 @@ export class Oracledb {
     this.__listenerKey = "__fusabaseindexeddb__";
     this.app = app;
     this.type = "oracledb";
-    let socketURL = app.options.ordsHost ?? '';
-    let cert = socketURL.split("://")[0];
-    let useSSL = cert !== "http";
-    socketURL = socketURL.split("://")[1];
-    let schemaName = socketURL.split("ords")[1];
-    socketURL = socketURL.split("ords")[0];
-    socketURL = socketURL + "ords/baas-realtime" + schemaName;
+    const realtimeEndpoint = buildRealtimeEndpoint(app.options.ordsHost ?? '');
+    this.#realtimeHost = realtimeEndpoint.host;
+    this.#realtimeSsl = realtimeEndpoint.ssl;
+    const initialLongPollingOptions = app.options.longPollingInterval === undefined
+      ? undefined
+      : { timeoutSeconds: app.options.longPollingInterval };
     this._settings = {
       experimentalAutoDetectLongPolling: !app.options.useSocket,
       experimentalForceLongPolling: !app.options.useSocket,
-      host: socketURL,
-      ssl: useSSL,
+      host: this.#realtimeHost,
+      ssl: this.#realtimeSsl,
       merge: false,
       ignoreUndefinedProperties: true,
-      experimentalLongPollingOptions: { timeoutSeconds: app.options.longPollingInterval }
+      experimentalLongPollingOptions: normalizeRuntimeLongPollingOptions(initialLongPollingOptions)
     };
     this.#conn = new DBConn(app);
     this.#snapStore = new SnapshotStorage(this, app.options.appID + "FUSABASE_SNAP_DB1", "SNAPS", "queryId");
@@ -91,9 +156,17 @@ export class Oracledb {
     if (this.eventManager.addEventListener != null) {
       this.eventManager.addEventListener("socket established", (e: Event) => {
         e.preventDefault?.();
-        for (let i = 0; i < this.__messageQueue.length; i++) {
-          Utils.baasLogger(this.app.logLevel, "sending message from queue", this.__messageQueue[i]);
-          this.connection!.send(this.__messageQueue[i]);
+        const queuedMessages = [...this.__messageQueue];
+        this.__clearMessageQueue();
+        for (let i = 0; i < queuedMessages.length; i++) {
+          Utils.baasLogger(this.app.logLevel, "sending message from queue", queuedMessages[i]);
+          try {
+            this.connection!.send(queuedMessages[i]);
+          } catch {
+            const error = createRealtimeSocketError("Realtime socket send failed.");
+            this.__failRealtimeListeners(error);
+            break;
+          }
         }
       });
     }
@@ -130,14 +203,25 @@ export class Oracledb {
    */
   settings(obj: any) {
     argCheck(obj, "Invalid argument passed", true, [typeStrings.OBJECT]);
+    rejectRealtimeEndpointOverrides(obj);
+    const currentTimeoutSeconds =
+      this._settings.experimentalLongPollingOptions?.timeoutSeconds ??
+      DEFAULT_LONG_POLLING_TIMEOUT_SECONDS;
+    const experimentalLongPollingOptions =
+      obj.experimentalLongPollingOptions === undefined
+        ? this._settings.experimentalLongPollingOptions
+        : normalizeRuntimeLongPollingOptions(
+            obj.experimentalLongPollingOptions,
+            currentTimeoutSeconds
+          );
     this._settings = {
       experimentalAutoDetectLongPolling: obj.experimentalAutoDetectLongPolling ?? this._settings.experimentalAutoDetectLongPolling,
       experimentalForceLongPolling: obj.experimentalForceLongPolling ?? this._settings.experimentalForceLongPolling,
-      host: obj.host ?? this._settings.host,
-      ssl: obj.ssl ?? this._settings.ssl,
+      host: this.#realtimeHost,
+      ssl: this.#realtimeSsl,
       merge: obj.merge ?? this._settings.merge,
       ignoreUndefinedProperties: obj.ignoreUndefinedProperties ?? this._settings.ignoreUndefinedProperties,
-      experimentalLongPollingOptions: obj.experimentalLongPollingOptions ?? this._settings.experimentalLongPollingOptions
+      experimentalLongPollingOptions
     };
   }
 
@@ -179,6 +263,45 @@ export class Oracledb {
     return this.#snapStore!.delete(id);
   }
 
+  private __clearMessageQueue(): void {
+    this.__messageQueue = [];
+    this.__messageQueueBytes = 0;
+  }
+
+  private __failRealtimeListeners(error: Error): void {
+    const callbacks = Object.values(this.__callbacks);
+    this.__clearMessageQueue();
+    this.__snaps = {};
+    this.__callbacks = {};
+    this.__queryIdMap = {};
+
+    for (const callback of callbacks) {
+      if (callback?.error) {
+        try {
+          callback.error(error);
+        } catch (ue) {
+          Utils.baasLogger(this.app.logLevel, "Error in snapshot callback", ue);
+        }
+      }
+    }
+  }
+
+  private __queueMessage(message: string): void {
+    const messageBytes = getMessageByteLength(message);
+    if (
+      messageBytes > MAX_REALTIME_MESSAGE_QUEUE_BYTES ||
+      this.__messageQueue.length >= MAX_REALTIME_MESSAGE_QUEUE_COUNT ||
+      this.__messageQueueBytes + messageBytes > MAX_REALTIME_MESSAGE_QUEUE_BYTES
+    ) {
+      const error = createRealtimeQueueError("Realtime listener message queue limit exceeded.");
+      this.__failRealtimeListeners(error);
+      throw oracledbErrorHandler(error);
+    }
+
+    this.__messageQueue.push(message);
+    this.__messageQueueBytes += messageBytes;
+  }
+
   /**
    * @internal
    */
@@ -186,7 +309,7 @@ export class Oracledb {
     const strPayload = JSON.stringify(payload);
     if (!this.connection || this.connection.readyState !== 1) {
       Utils.baasLogger(this.app.logLevel, "adding to message queue");
-      this.__messageQueue.push(strPayload);
+      this.__queueMessage(strPayload);
     } else {
       Utils.baasLogger(this.app.logLevel, "sending directly");
       this.connection.send(strPayload);
@@ -209,7 +332,7 @@ export class Oracledb {
   );
 
   this.connection = createConnection(
-    getHostString(this._settings.ssl, this._settings.host, snapToken["access_token"])
+    getHostString(this.#realtimeSsl, this.#realtimeHost, snapToken["access_token"])
   );
 
   const __fireEvent = (event: Event) => {
@@ -222,7 +345,16 @@ export class Oracledb {
   };
 
   this.connection.onerror = (error: Event) => {
-    alert(`[error]`);
+    Utils.baasLogger(this.app.logLevel, "Realtime socket error", error);
+    this.__failRealtimeListeners(
+      createRealtimeSocketError("Realtime socket connection failed.")
+    );
+    try {
+      this.connection?.close();
+    } catch {
+      // Ignore close errors after a failed websocket connection.
+    }
+    this.connection = null;
   };
 
   const oracleDB = this;

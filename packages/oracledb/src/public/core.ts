@@ -28,11 +28,11 @@
 import { App } from "../../../app/src/public-types.js";
 import fusabase from "../../../app/src/fusabase-internal.js";
 import { Oracledb } from "../internal/core.js";
-import { OracledbSettings } from "../internal/settings.js";
+import { type OracledbSettings } from "../internal/settings.js";
 
 export function initializeOracledb(
   app: App,
-  settings: OracledbSettings,
+  settings?: OracledbSettings,
   databaseId?: string
 ): Oracledb {
   if (!(app instanceof App)) {

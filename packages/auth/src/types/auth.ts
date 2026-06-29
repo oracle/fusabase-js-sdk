@@ -31,7 +31,7 @@ import PersistenceType from '../helpers/persistence/PersistenceType.js';
 import { IDCSAuthHelper, ONPREMAuthHelper } from '../helpers/authHelper.js';
 import { browserLocalPersistence, browserSessionPersistence, inMemoryPersistence } from './persistence.js';
 import { AuthProvider } from '../providers/provider.js';
-import { Config, getConfig, IDCSConfig, ONPREMConfig } from '../helpers/config.js';
+import { getConfig, IDCSConfig, ONPREMConfig } from '../helpers/config.js';
 import PersistenceUserManager from '../helpers/persistence/PersistenceUserManager.js';
 import BrowserLocalPersistence from '../helpers/storage/BrowserLocalPersistence.js';
 import { argCheck, AuthError, authErrorHandler, ErrorCode, ErrorCodeMessage, typeStrings, getErrorMessage } from '../errors.js';
@@ -263,22 +263,14 @@ export class Auth {
     this.tenantId = null;
     this.currentUser = null;
 
-    // Select appropriate helper based on auth type.
-    if (this.intConfig.authType === "idcs") {
-      this.authHelper = new IDCSAuthHelper(
-        this.intConfig,
-        app.logLevel,
-        new URL(this.app.options.ordsHost).origin
-      );
-    } 
     // else if (this.intConfig.authType === "base_s" || this.intConfig.authType === "ldap_s") {
     //   this.authHelper = new ONPREMSRPAuthHelper(this.intConfig as ONPREMSRPConfig, app.logLevel);
     // } 
-    else {
-      this.authHelper = new ONPREMAuthHelper(this.intConfig as ONPREMConfig, app.logLevel, new URL(this.app.options.ordsHost).origin);
-      // wire app into helper so ONPREM helper can use fusabaseFetch (App Check header attachment)
-      (this.authHelper as any)?._setApp?.(app);
-    }
+    this.authHelper = this.intConfig.authType === "idcs"
+      ? new IDCSAuthHelper(this.intConfig as IDCSConfig, app.logLevel, new URL(this.app.options.ordsHost).origin)
+      : new ONPREMAuthHelper(this.intConfig as ONPREMConfig, app.logLevel, new URL(this.app.options.ordsHost).origin);
+    // wire app into helper so requests use the shared Fusabase fetch path.
+    (this.authHelper as any)?._setApp?.(app);
 
     this.eventListener = new EventTarget();
 
@@ -536,7 +528,7 @@ export class Auth {
         throw new Error("Uninitialized auth");
       }
       
-      await this.authHelper.registerUser(email, password,  this.app.options.authType === "idcs" ? `${this.app.options.ordsHost}_/baas-services/idm/idcs/${this.app.options.projectID}/${IDCSConfig.ADD_USER_REST_EP}?apiKey=${this.app.options.appID}` : "");
+      await this.authHelper.registerUser(email, password, "");
 
       response = await this.signInWithEmailAndPassword(email, password);
     } catch (err) {
@@ -723,17 +715,14 @@ export class Auth {
     }
     tokens.access_token = new IdTokenResult(tokens.access_token.intToken);
     var _userHelper = null;
-    if (this.intConfig.authType === 'idcs') {
-      _userHelper = new IDCSUserHelper(this.intConfig, null, tokens.access_token, this.app.logLevel);
-      _userHelper.user = this;
-    }
     // else if (this.intConfig.authType === 'base_s' || this.intConfig.authType === 'ldap_s') {
     //   _userHelper = new ONPREMSRPUserHelper(this.intConfig, null, tokens.access_token, this.app.logLevel);
     // }
-    else {
-      _userHelper = new ONPREMUserHelper(this.intConfig, null, tokens.access_token, this.app.logLevel);
-     _userHelper.user = this;
-    }
+    _userHelper = this.intConfig.authType === 'idcs'
+      ? new IDCSUserHelper(this.intConfig, null, tokens.access_token, this.app.logLevel)
+      : new ONPREMUserHelper(this.intConfig, null, tokens.access_token, this.app.logLevel);
+    _userHelper.user = this;
+    (_userHelper as any)?._setApp?.(this.app);
     var forcerefresh = false;
     if (!_userHelper.validateAccessToken()) {
       forcerefresh = true;
@@ -1115,7 +1104,7 @@ async signInWithRedirect(provider: AuthProvider): Promise<never> {
         const code = params.get("code");
     
         if (code && this.authHelper) {
-          const data = await this.authHelper.getRedirectCredentials(code, this.app.options.authType === "idcs" ? `${this.app.options.ordsHost}_/baas-services/idm/idcs/${this.app.options.projectID}/${IDCSConfig.REDIRECT_RESULT_EP}?apiKey=${this.app.options.appID}` : "");
+          const data = await this.authHelper.getRedirectCredentials(code, "");
           if (data && data.id_token && !data.access_token) {
             let newCreds;
             if (!this.currentUser) {
@@ -1385,10 +1374,15 @@ async signInWithRedirect(provider: AuthProvider): Promise<never> {
       if (this.currentUser && this.authHelper && this.currentUser.refreshToken) {
         await this.authHelper.performSignOut(this.currentUser.refreshToken);
       }
+    } catch (e) {
 
+    }
+    try {
       this.executeBeforeAuthStateChanged(null);
-
       await this.syncLogoutPersistence();
+    } catch (err) {
+    }
+    try {
       await this.updateCurrentUser(null);
     } catch (err) {
       throw authErrorHandler(err);

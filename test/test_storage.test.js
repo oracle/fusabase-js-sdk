@@ -47,7 +47,7 @@ describe("fusabase Storage Tests", function () {
     let app, storage, ref1, ref2, ref3;
 
     it("should initialize app with correct options", function () {
-        app = initializeApp({...options,appCheckToken:"APP_CHECK_TOKEN"}, "test");
+        app = initializeApp({...options,appTrustToken:"APP_TRUST_TOKEN"}, "test");
         expect(app.options.ordsHost).to.equal(options.ords_host);
         expect(app.options.schema).to.equal(options.schema);
         expect(app.options.appID).to.equal(options.app_id);
