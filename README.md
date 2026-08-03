@@ -1,8 +1,8 @@
-# Oracle® Backend for Firebase (Fusabase) JavaScript SDK
+# Oracle® Backend with Firebase APIs (Fusabase) JavaScript SDK
 
-A modular JavaScript SDK for Oracle Backend for Firebase (Fusabase) that provides authentication, document database, storage, App Trust, vector search, and UI component capabilities.
+A modular JavaScript SDK for Oracle Backend with Firebase APIs (Fusabase) that provides authentication, document database, storage, App Trust, vector search, and UI component capabilities.
 
-This Oracle Backend for Firebase JavaScript SDK follows the Firebase design, API patterns, and rules-based authorization model. Its SDK interfaces are designed to mirror the Firebase SDK interfaces so developers can move across backends with minimal changes. This Oracle Backend for Firebase JavaScript SDK is a distinct Oracle offering.
+This Oracle Backend with Firebase APIs JavaScript SDK follows the Firebase design, API patterns, and rules-based authorization model. Its SDK interfaces are designed to mirror the Firebase SDK interfaces so developers can move across backends with minimal changes. This Oracle Backend with Firebase APIs JavaScript SDK is a distinct Oracle offering.
 
 ## Prerequisites
 
@@ -413,7 +413,7 @@ Integration tests are run against a separate test application. Follow these step
 
 ## Trademarks
 
-Firebase is a trademark of Google LLC.  Use of the Firebase name here is solely to describe the design patterns and SDK interfaces that Oracle Backend for Firebase follows for developer familiarity and ease of migration; it does not imply any affiliation with or endorsement by Google.
+Firebase is a trademark of Google LLC.  Use of the Firebase name here is solely to describe the design patterns and SDK interfaces that Oracle Backend with Firebase APIs follows for developer familiarity and ease of migration; it does not imply any affiliation with or endorsement by Google.
 
 ## Contributing
 
