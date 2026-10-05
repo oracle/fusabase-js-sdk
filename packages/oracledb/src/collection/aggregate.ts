@@ -27,7 +27,7 @@
 
 import { AggregateType, AggregateSpec , DocumentData } from '../types/common.js';
 import { FieldPath } from '../field/path.js';
-import { argCheck, typeStrings } from '../../../auth/src/errors.js';
+import { argCheck, typeStrings } from '../util/utils.js';
 import { Utils,oracledbErrorHandler,QueryHelper,getAccessToken } from '../util/utils.js';
 import { Query } from './reference.js';
 

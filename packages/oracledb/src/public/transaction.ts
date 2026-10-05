@@ -29,11 +29,20 @@ import { Oracledb } from "../internal/core.js";
 import { WriteBatch } from "../transaction/batch.js";
 import { oracledbErrorHandler } from "../util/utils.js";
 import { Transaction } from "../transaction/batch.js";
+import { _assertServerReadable } from "./offline.js";
 /**
  * Executes a transaction on the Oracledb/Oracledb instance.
  * @param db - Oracledb or Oracledb instance.
  * @param updateFunction - Function to execute within the transaction.
  * @param options - Optional configuration for transaction, e.g. { maxAttempts }
+ * @returns A promise resolving to the value returned by `updateFunction`.
+ * @example
+ * ```ts
+ * await runTransaction(db, async transaction => {
+ *   const snapshot = await transaction.get(counter);
+ *   transaction.update(counter, { value: snapshot.data().value + 1 });
+ * });
+ * ```
  */
 export async function runTransaction<T>(
   db: Oracledb | Oracledb,
@@ -45,6 +54,7 @@ export async function runTransaction<T>(
     error.status = 400;
     throw oracledbErrorHandler(error);
   }
+  _assertServerReadable(db);
 
   const transactionOptions = options?.maxAttempts !== undefined ? options : { maxAttempts: 5 };
 
@@ -64,6 +74,12 @@ export async function runTransaction<T>(
  * 
  * @param db - Oracledb or Oracledb instance.
  * @returns WriteBatch instance for batching write operations.
+ * @example
+ * ```ts
+ * const batch = writeBatch(db);
+ * batch.set(profile, { name: 'Ada' });
+ * await batch.commit();
+ * ```
  */
 export function writeBatch(
   db: Oracledb | Oracledb

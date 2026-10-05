@@ -42,8 +42,7 @@ export async function fusabaseFetch(app: App | undefined, url: string, init: Req
     const tok = getAppTrustToken(app);
     if (appTrustInstance && !tok) {
       try {
-        const { getToken } = await import('../../app-trust/src/app-trust.js');
-        await getToken(appTrustInstance, false);
+        await (app as any)?._getAppTrustToken?.(false);
       } catch {
       }
     }
@@ -68,8 +67,7 @@ export async function fusabaseFetch(app: App | undefined, url: string, init: Req
   if (!appTrustInstance) return res;
 
   try {
-    const { getToken } = await import('../../app-trust/src/app-trust.js');
-    await getToken(appTrustInstance, true);
+    await (app as any)?._getAppTrustToken?.(true);
   } catch {
     return res;
   }

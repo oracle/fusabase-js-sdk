@@ -40,6 +40,10 @@ import { Query } from "../collection/reference.js";
  * @param path - Path to the collection
  * @param pathSegments - Additional path segments
  * @returns CollectionReference<DocumentData, DocumentData>
+ * @example
+ * ```ts
+ * const users = collection(db, 'users');
+ * ```
  */
 export function collection(
   db: Oracledb | DocumentReference<any, any> | CollectionReference<any, any>, 
@@ -81,6 +85,14 @@ export function collection(
 
 /**
  * Returns a reference to a duality view collection.
+ *
+ * @param db - The database service instance.
+ * @param name - The duality-view collection name.
+ * @returns A duality-view collection reference.
+ * @example
+ * ```ts
+ * const orders = dualityViewCollection(db, 'ORDERS');
+ * ```
  */
 export function dualityViewCollection(
   db: Oracledb,
@@ -102,6 +114,15 @@ export function dualityViewCollection(
 
 /**
  * Returns a reference to a duality view document.
+ *
+ * @param db - The database service or duality-view collection reference.
+ * @param path - A document identifier or path.
+ * @param pathSegments - Additional path segments.
+ * @returns A duality-view document reference.
+ * @example
+ * ```ts
+ * const order = dualityViewDoc(db, 'ORDERS', '42');
+ * ```
  */
 export function dualityViewDoc<
   AppModelType,
@@ -152,6 +173,11 @@ export function dualityViewDoc<
  * Returns a `CollectionReference` referring to a collection group with the given name.
  * @param oracledb - An Oracledb instance.
  * @param name - The collection group name.
+ * @returns A query spanning collections with the supplied name.
+ * @example
+ * ```ts
+ * const allMessages = collectionGroup(db, 'messages');
+ * ```
  */
 export function collectionGroup(
   oracledb: Oracledb,

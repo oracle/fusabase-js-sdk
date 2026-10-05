@@ -65,6 +65,10 @@ async function assertMetadataWithinDownloadLimit(
  * @param storage - The Storage instance or StorageReference.
  * @param path - The path to the storage object.
  * @returns A StorageReference.
+ * @example
+ * ```ts
+ * const avatar = ref(storage, 'avatars/ada.png');
+ * ```
  */
 export function ref(storage: Storage | StorageReference, path: string): StorageReference {
   if (!(storage instanceof Storage || storage instanceof StorageReference)) {
@@ -91,6 +95,10 @@ export function ref(storage: Storage | StorageReference, path: string): StorageR
  * @param ref - The StorageReference to download data from.
  * @param maxDownloadSizeBytes - The maximum size of data to download in bytes, or null for no limit.
  * @returns A promise that resolves with the ArrayBuffer.
+ * @example
+ * ```ts
+ * const bytes = await getBytes(avatar, 5 * 1024 * 1024);
+ * ```
  */
 export async function getBytes(ref: StorageReference, maxDownloadSizeBytes: number | null): Promise<ArrayBuffer> {
   if (!(ref instanceof StorageReference)) {
@@ -112,6 +120,10 @@ export async function getBytes(ref: StorageReference, maxDownloadSizeBytes: numb
  * @param ref - The StorageReference to download data from.
  * @param maxDownloadSizeBytes - The maximum size of data to download in bytes, or null for no limit.
  * @returns A promise that resolves with the Blob.
+ * @example
+ * ```ts
+ * const blob = await getBlob(avatar, null);
+ * ```
  */
 export async function getBlob(ref: StorageReference, maxDownloadSizeBytes: number | null): Promise<Blob> {
   if (!(ref instanceof StorageReference)) {
@@ -133,6 +145,10 @@ export async function getBlob(ref: StorageReference, maxDownloadSizeBytes: numbe
  * @param ref - The StorageReference to download data from.
  * @param maxDownloadSizeBytes - The maximum size of data to download in bytes, or null for no limit.
  * @returns A promise that resolves with the response stream.
+ * @example
+ * ```ts
+ * const response = await getStream(avatar, null);
+ * ```
  */
 export async function getStream(ref: StorageReference, maxDownloadSizeBytes: number | null): Promise<any> {
   if (!(ref instanceof StorageReference)) {
@@ -148,6 +164,10 @@ export async function getStream(ref: StorageReference, maxDownloadSizeBytes: num
  * Deletes the object at the given reference.
  * @param ref - The StorageReference to delete the object at.
  * @returns A promise that resolves when the object is deleted.
+ * @example
+ * ```ts
+ * await deleteObject(avatar);
+ * ```
  */
 export async function deleteObject(ref: StorageReference): Promise<void> {
   if (!(ref instanceof StorageReference)) {
@@ -162,6 +182,10 @@ export async function deleteObject(ref: StorageReference): Promise<void> {
  * Gets the download URL for the given reference.
  * @param ref - The StorageReference to get the download URL for.
  * @returns A promise that resolves with the download URL.
+ * @example
+ * ```ts
+ * const url = await getDownloadURL(avatar);
+ * ```
  */
 export async function getDownloadURL(ref: StorageReference): Promise<string> {
   if (!(ref instanceof StorageReference)) {

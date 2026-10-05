@@ -33,10 +33,30 @@ import { DocumentSnapshot } from "../document/snapshot.js";
 import { doc } from "./document.js";
 import { getOracledb } from "./core.js";
 import { oracledbErrorHandler } from "../util/utils.js";
-import { QuerySnapshot } from "../collection/snapshot.js";
+import { isQuerySnapshotFromFailedRequest, QuerySnapshot } from "../collection/snapshot.js";
 import { AggregateSpec } from "../types/common.js";
 import { AggregateField, AggregateQuerySnapshot } from "../collection/aggregate.js";
+import {
+  _assertServerReadable,
+  _cacheDocumentSnapshot,
+  _cacheQuerySnapshot,
+  _getDocFromCacheIfEnabled,
+  _getDocsFromCacheIfEnabled,
+  _getPendingCacheSnapshotForQuery,
+  _hasPendingWritesForDocument,
+  _shouldReadFromCache,
+} from "./offline.js";
 
+/**
+ * Reads all results for a query directly from the remote service.
+ *
+ * @param q - The query or collection to read.
+ * @returns A promise resolving to a query snapshot.
+ * @example
+ * ```ts
+ * const snapshot = await getDocsFromServer(users);
+ * ```
+ */
 export async function getDocsFromServer<
   AppModelType = any,
   DbModelType extends DocumentData = DocumentData
@@ -52,7 +72,10 @@ export async function getDocsFromServer<
   //   error.status = 400;
   //   throw oracledbErrorHandler(error);
   // }
-  return q.get();
+  _assertServerReadable((q as any).oracledb);
+  const snap = await q.get();
+  await _cacheQuerySnapshot(snap as any);
+  return snap;
 }
 
 
@@ -80,8 +103,24 @@ export async function getDocs<AppModelType, DbModelType extends DocumentData>(
   //   error.status = 400;
   //   throw oracledbErrorHandler(error);
   // }
-  // The `.get()` method should return a QuerySnapshot<AppModelType, DbModelType>
-  return q.get() as any;
+  const db = (q as any).oracledb;
+  if (_shouldReadFromCache(db)) {
+    const cached = _getDocsFromCacheIfEnabled(q);
+    if (cached) return cached as Promise<QuerySnapshot<AppModelType, DbModelType>>;
+  }
+  try {
+    // The `.get()` method should return a QuerySnapshot<AppModelType, DbModelType>
+    const snap = await q.get() as any;
+    await _cacheQuerySnapshot(snap);
+    if (isQuerySnapshotFromFailedRequest(snap)) return snap;
+    const pendingCache = await _getPendingCacheSnapshotForQuery(q);
+    if (pendingCache) return pendingCache as QuerySnapshot<AppModelType, DbModelType>;
+    return snap;
+  } catch (error) {
+    const cached = _getDocsFromCacheIfEnabled(q);
+    if (cached) return cached as Promise<QuerySnapshot<AppModelType, DbModelType>>;
+    throw error;
+  }
 }
 
 
@@ -110,7 +149,25 @@ export async function getDoc<
     error.status = 400;
     throw oracledbErrorHandler(error);
   }
-  return ref.get() as any;
+  if (ref instanceof DocumentReference && _shouldReadFromCache(ref.oracledb)) {
+    const cached = _getDocFromCacheIfEnabled(ref);
+    if (cached) return cached as Promise<DocumentSnapshot<AppModelType, DbModelType>>;
+  }
+  try {
+    const snap = await ref.get() as any;
+    await _cacheDocumentSnapshot(snap);
+    if (ref instanceof DocumentReference && await _hasPendingWritesForDocument(ref)) {
+      const cached = _getDocFromCacheIfEnabled(ref);
+      if (cached) return cached as Promise<DocumentSnapshot<AppModelType, DbModelType>>;
+    }
+    return snap;
+  } catch (error) {
+    if (ref instanceof DocumentReference) {
+      const cached = _getDocFromCacheIfEnabled(ref);
+      if (cached) return cached as Promise<DocumentSnapshot<AppModelType, DbModelType>>;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -118,6 +175,10 @@ export async function getDoc<
  *
  * @param ref - DocumentReference or DualityViewDocReference
  * @returns Promise<DocumentSnapshot>
+ * @example
+ * ```ts
+ * const snapshot = await getDocFromServer(profile);
+ * ```
  */
 export async function getDocFromServer<
   AppModelType,
@@ -130,7 +191,10 @@ export async function getDocFromServer<
     error.status = 400;
     throw oracledbErrorHandler(error);
   }
-  return ref.get() as any;
+  _assertServerReadable(ref.oracledb);
+  const snap = await ref.get() as any;
+  await _cacheDocumentSnapshot(snap);
+  return snap;
 }
 
 /**
@@ -139,6 +203,10 @@ export async function getDocFromServer<
  * @param query - Query or collection to aggregate
  * @param aggregateSpec - The specification for aggregate fields
  * @returns AggregateQuerySnapshot with results of the aggregation
+ * @example
+ * ```ts
+ * const snapshot = await getAggregateFromServer(orders, { total: sum('amount') });
+ * ```
  */
 export async function getAggregateFromServer<
   AggregateSpecType extends AggregateSpec,
@@ -171,6 +239,11 @@ export async function getAggregateFromServer<
  *
  * @param query - The query or collection to execute the count on.
  * @returns Promise with AggregateQuerySnapshot containing the count.
+ * @example
+ * ```ts
+ * const snapshot = await getCountFromServer(users);
+ * console.log(snapshot.data().count);
+ * ```
  */
 export async function getCountFromServer<
   AppModelType,

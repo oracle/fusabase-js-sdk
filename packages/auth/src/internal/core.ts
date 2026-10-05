@@ -31,9 +31,11 @@ import { PopupRedirectResolver, Dependencies } from '../types/auth.js';
 import { User } from '../types/user.js';
 import { Unsubscribe } from '../types/auth.js';
 import { Persistence } from '../types/persistence.js';
+import { browserLocalPersistence, browserSessionPersistence, inMemoryPersistence } from '../types/persistence.js';
 import { PasswordValidationStatus, PasswordPolicy } from '../types/password.js'
 import { authErrorHandler,argCheck,typeStrings, AuthError, ErrorCodeMessage } from '../errors.js';
 import fusabase from '../../../app/src/fusabase-internal.js';
+import { _getProvider } from '../../../app/src/index.js';
 
 /**
  * Returns the Auth instance for the given App.
@@ -49,7 +51,19 @@ export function getAuth(app?: App): Auth {
         error.status = 400;
         throw authErrorHandler(error);
     }
-    return fusabase.auth(app) as any;
+    const provider = _getProvider<Auth>(app, 'auth');
+    if (provider.isInitialized()) {
+      return provider.getImmediate() as Auth;
+    }
+    return provider.initialize({
+      options: {
+        persistence: [
+          browserLocalPersistence,
+          browserSessionPersistence,
+          inMemoryPersistence
+        ]
+      }
+    });
 }
 
 
@@ -92,7 +106,11 @@ export function initializeAuth(
         }
     }
 
-    return fusabase.auth(app) as any;
+    const provider = _getProvider<Auth>(app, 'auth');
+    if (provider.isInitialized()) {
+        return provider.getImmediate() as Auth;
+    }
+    return provider.initialize({ options: deps });
 }
 
 

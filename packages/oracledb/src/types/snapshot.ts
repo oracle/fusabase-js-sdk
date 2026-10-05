@@ -53,6 +53,8 @@ export declare interface ExperimentalLongPollingOptions {
 
 }
 
+export type ListenSource = 'default' | 'cache';
+
 /**
  * Options that configure the behavior of snapshot listeners in Oracledb.
  * These options apply to both `onSnapshot()` for queries and document references.
@@ -80,16 +82,15 @@ export declare interface SnapshotListenOptions {
    * Possible values include:
    * - `"default"` (cache + server)
    * - `"cache"` (only local cache)
-   * - `"server"` (only server)
    *
    * @example
    * ```ts
-   * onSnapshot(docRef, { source: "server" }, snapshot => {
-   *   console.log("Received server-only snapshot:", snapshot.data());
+   * onSnapshot(docRef, { source: "cache" }, snapshot => {
+   *   console.log("Received cache-only snapshot:", snapshot.data());
    * });
    * ```
    */
-  // source?: ListenSource;
+  source?: ListenSource;
 }
 
 /**

@@ -1,6 +1,6 @@
-# Oracle Backend for Firebase SDK Guide for Coding Agents
+# Oracle Backend with Firebase APIs SDK Guide for Coding Agents
 
-This repository contains the Oracle Backend for Firebase JavaScript modular SDK. The product name is **Oracle Backend for Firebase**. The package and import name that application code should use is **`fusabase`**.
+This repository contains the Oracle Backend with Firebase APIs JavaScript modular SDK. The product name is **Oracle Backend with Firebase APIs**. The package and import name that application code should use is **`fusabase`**.
 
 Use this file as background context when you are scanning the SDK or generating application code that consumes it.
 
@@ -21,7 +21,7 @@ Do not import from `packages/...`, `dist/...`, or other internal repository path
 
 ## Configuration
 
-Applications initialize the SDK with a config object from the Oracle Backend for Firebase console. The public input shape uses **snake_case** keys (the console emits JSON; pass it through unchanged):
+Applications initialize the SDK with a config object from the Oracle Backend with Firebase APIs console. The public input shape uses **snake_case** keys (the console emits JSON; pass it through unchanged):
 
 - `ords_host`
 - `schema`
@@ -33,7 +33,7 @@ Applications initialize the SDK with a config object from the Oracle Backend for
 - `storage_bucket`
 - `auth_type`
 - `auth_id`
-- `idcs_config`
+- `idcs_domain_url` (for `auth_type: "idcs"`)
 
 High-level example:
 
@@ -60,7 +60,7 @@ Internally the SDK exposes a camelCase `FusabaseOptions` view on `app.options` (
 
 - `fusabase/app`: app initialization, named apps, app lookup, app deletion, and log level control.
 - `fusabase/auth`: authentication state, email/password auth, provider auth, token access, persistence, linking, and user account operations.
-- `fusabase/oracledb`: document and collection access, queries, writes, transactions, aggregates, listeners, field operations, vector search, bulk updates, collection-group queries, and duality-view helpers.
+- `fusabase/oracledb`: document and collection access, queries, writes, transactions, aggregates, listeners, field operations, vector search, bulk updates, collection-group queries, duality-view helpers, and browser offline persistence.
 - `fusabase/storage`: storage references, uploads, downloads, metadata, listing, and deletion.
 - `fusabase/ui`: browser auth UI helpers through `authUI.AuthUI`.
 - `fusabase/app-trust`: browser trust-token initialization and token acquisition with provider-based attestation.
@@ -148,6 +148,7 @@ Use these docs when you need more module-specific context:
 - `agent_docs/app.md`: app lifecycle and shared app-instance APIs.
 - `agent_docs/auth.md`: auth state, sign-in flows, persistence, tokens, and user operations.
 - `agent_docs/oracledb.md`: collections, documents, queries, writes, transactions, aggregates, listeners, vector search, bulk updates, collection-group queries, and duality-view joins.
+- `agent_docs/offline.md`: browser offline setup, cache reads, queued writes, network control, and supported query behavior.
 - `agent_docs/storage.md`: references, uploads, downloads, metadata, listing, and deletion.
 - `agent_docs/ui.md`: `authUI.AuthUI` usage and supported sign-in options.
 - `agent_docs/app-trust.md`: browser app-trust providers, token retrieval, and token listeners.

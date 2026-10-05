@@ -26,6 +26,7 @@
 // 
 
 import { expect } from "chai";
+import { options } from "./config.js";
 import {initializeApp, setLogLevel, LogLevel, App} from "fusabase/app";
 import {  
     getStorage,  
@@ -41,13 +42,10 @@ import {
 describe("fusabase Storage Tests", function () {
     this.timeout(30000);
 
-    const options = {};
-
-
     let app, storage, ref1, ref2, ref3;
 
     it("should initialize app with correct options", function () {
-        app = initializeApp({...options,appTrustToken:"APP_TRUST_TOKEN"}, "test");
+        app = initializeApp(options, "storage-test");
         expect(app.options.ordsHost).to.equal(options.ords_host);
         expect(app.options.schema).to.equal(options.schema);
         expect(app.options.appID).to.equal(options.app_id);

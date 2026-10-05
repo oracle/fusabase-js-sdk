@@ -28,6 +28,12 @@
 import { FieldValue } from "../field/value.js";
 /**
  * Returns a sentinel for setting a field to the server-generated timestamp.
+ *
+ * @returns A timestamp sentinel for use in a write.
+ * @example
+ * ```ts
+ * await updateDoc(profile, { updatedAt: serverTimestamp() });
+ * ```
  */
 export function serverTimestamp(): FieldValue {
   return FieldValue.serverTimestamp();
@@ -35,6 +41,12 @@ export function serverTimestamp(): FieldValue {
 
 /**
  * Returns a sentinel for deleting a field in Oracledb.
+ *
+ * @returns A deletion sentinel for use in a write.
+ * @example
+ * ```ts
+ * await updateDoc(profile, { temporaryValue: deleteField() });
+ * ```
  */
 export function deleteField(): FieldValue {
   return FieldValue.delete();
@@ -42,7 +54,13 @@ export function deleteField(): FieldValue {
 
 /**
  * Returns a sentinel for adding elements to an array field.
- * @param elements - Elements to add
+ *
+ * @param elements - Elements to add.
+ * @returns An array-union sentinel for use in a write.
+ * @example
+ * ```ts
+ * await updateDoc(profile, { roles: arrayUnion('editor') });
+ * ```
  */
 export function arrayUnion<T>(...elements: T[]): FieldValue {
   return FieldValue.arrayUnion(...elements);
@@ -50,6 +68,13 @@ export function arrayUnion<T>(...elements: T[]): FieldValue {
 
 /**
  * Returns a sentinel for removing elements from an array field.
+ *
+ * @param elements - Elements to remove.
+ * @returns An array-removal sentinel for use in a write.
+ * @example
+ * ```ts
+ * await updateDoc(profile, { roles: arrayRemove('viewer') });
+ * ```
  * @param elements - Elements to remove
  */
 export function arrayRemove<T>(...elements: T[]): FieldValue {
@@ -58,6 +83,13 @@ export function arrayRemove<T>(...elements: T[]): FieldValue {
 
 /**
  * Returns a sentinel for incrementing a numeric field.
+ *
+ * @param n - The amount by which to change the numeric value.
+ * @returns An increment sentinel for use in a write.
+ * @example
+ * ```ts
+ * await updateDoc(counter, { value: increment(1) });
+ * ```
  * @param n - The amount to increment by
  */
 export function increment(n: number): FieldValue {

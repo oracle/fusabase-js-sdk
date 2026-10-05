@@ -414,20 +414,17 @@ export class DocumentReference<
 
       const getSnap = () => {
         this.get().then(docSnap => {
-          let newVer = null;
-          if (docSnap._otherMetadata["ASOF"]) {
-            newVer = BigInt(docSnap._otherMetadata["ASOF"]);
-          } else {
-            newVer = BigInt(docSnap._otherMetadata["VERSION"]);
-          }
-          if (!lastDocUpdate || !newVer
-            || lastDocUpdate < newVer) 
+          const newVer = snapshotVersionMarker(docSnap);
+          if (lastDocUpdate == null || lastDocUpdate !== newVer)
           {
             lastDocUpdate = newVer;
             handleSnapshot(docSnap);
           }
         }
-        ).catch(e => { Utils.baasLogger(this.oracledb.app.logLevel, e); });
+        ).catch(e => {
+          this.oracledb.eventManager?.dispatchEvent?.(new Event("long polling error"));
+          Utils.baasLogger(this.oracledb.app.logLevel, e);
+        });
       }
 
       getSnap();
@@ -473,6 +470,12 @@ export class DocumentReference<
     doc.converter = (converter ?? null) as any;
     return doc as any;
   }
+}
+
+function snapshotVersionMarker(docSnap: any): string {
+  const metadata = docSnap?._otherMetadata ?? {};
+  const version = metadata["ASOF"] ?? metadata["VERSION"] ?? docSnap?.__version ?? "";
+  return String(version);
 }
 
 /* ===========================

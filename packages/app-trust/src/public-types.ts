@@ -67,6 +67,14 @@ export interface AppTrust {
   readonly app: App;
 }
 
+/**
+ * Browser attestation provider backed by reCAPTCHA v3.
+ *
+ * @example
+ * ```ts
+ * const provider = new ReCaptchaV3Provider('site-key');
+ * ```
+ */
 export class ReCaptchaV3Provider {
   /** reCAPTCHA v3 site key. */
   readonly siteKey: string;
@@ -75,6 +83,10 @@ export class ReCaptchaV3Provider {
    * Creates a reCAPTCHA v3 provider.
    *
    * @param siteKey - Your reCAPTCHA v3 site key.
+   * @example
+   * ```ts
+   * new ReCaptchaV3Provider('site-key');
+   * ```
    */
   constructor(siteKey: string) {
     this.siteKey = siteKey;
@@ -123,6 +135,14 @@ export class ReCaptchaV3Provider {
   }
 }
 
+/**
+ * Browser attestation provider backed by reCAPTCHA Enterprise.
+ *
+ * @example
+ * ```ts
+ * const provider = new ReCaptchaEnterpriseProvider('site-key');
+ * ```
+ */
 export class ReCaptchaEnterpriseProvider {
   /** reCAPTCHA Enterprise site key. */
   readonly siteKey: string;
@@ -131,6 +151,10 @@ export class ReCaptchaEnterpriseProvider {
    * Creates a reCAPTCHA Enterprise provider.
    *
    * @param siteKey - Your reCAPTCHA Enterprise site key.
+   * @example
+   * ```ts
+   * new ReCaptchaEnterpriseProvider('site-key');
+   * ```
    */
   constructor(siteKey: string) {
     this.siteKey = siteKey;
@@ -180,6 +204,14 @@ export class ReCaptchaEnterpriseProvider {
   }
 }
 
+/**
+ * Browser attestation provider backed by Turnstile.
+ *
+ * @example
+ * ```ts
+ * const provider = new TurnstileProvider('site-key');
+ * ```
+ */
 export class TurnstileProvider {
   /** Cloudflare Turnstile site key. */
   readonly siteKey: string;
@@ -187,6 +219,16 @@ export class TurnstileProvider {
   /** @internal Prevent concurrent/double execution (Turnstile errors like 110200). */
   private _inFlight?: Promise<string>;
 
+  /**
+   * Creates a Turnstile provider.
+   *
+   * @param siteKey - The Turnstile site key.
+   * @returns A configured provider instance.
+   * @example
+   * ```ts
+   * new TurnstileProvider('site-key');
+   * ```
+   */
   constructor(siteKey: string) {
     this.siteKey = siteKey;
   }
@@ -312,6 +354,14 @@ export class TurnstileProvider {
   }
 }
 
+/**
+ * Browser attestation provider backed by hCaptcha.
+ *
+ * @example
+ * ```ts
+ * const provider = new HCaptchaProvider('site-key');
+ * ```
+ */
 export class HCaptchaProvider {
   /** hCaptcha site key. */
   readonly siteKey: string;
@@ -320,6 +370,10 @@ export class HCaptchaProvider {
    * Creates an hCaptcha provider.
    *
    * @param siteKey - Your hCaptcha site key.
+   * @example
+   * ```ts
+   * new HCaptchaProvider('site-key');
+   * ```
    */
   constructor(siteKey: string) {
     this.siteKey = siteKey;

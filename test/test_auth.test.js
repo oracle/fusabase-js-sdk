@@ -26,6 +26,7 @@
 // 
 
 import { expect } from "chai";
+import { appTrustToken, options } from "./config.js";
 import {initializeApp, setLogLevel, LogLevel} from "fusabase/app";
 import { 
   getAuth, 
@@ -43,9 +44,10 @@ import {
 
 /**
  * App Trust enforcement testing (Option 1):
- * Provide a *valid* FUSABASE App Trust token via environment variable.
+ * Provide a valid FUSABASE App Trust token in `.env` when App Trust needs to
+ * be exercised by this integration suite.
  *
- *   FUSABASE_APP_TRUST_TOKEN="<token>" npm test
+ *   FUSABASE_APP_TRUST_TOKEN="<token>"
  *
  * The SDK will attach it as `X-Fusabase-AppTrust` (see packages/app/src/app-trust-header.ts).
  */
@@ -62,8 +64,6 @@ describe("fusabase Auth Tests", function () {
   this.timeout(30000);
 
   let app, auth_c;
-  const options = {};
-
   const providerid_value = "password";
   const providerid_value1 = "UserNamePassword";
 
@@ -76,11 +76,10 @@ describe("fusabase Auth Tests", function () {
   const phoneNumber2 = "1234567892";
 
   before(() => {
-    // Option 1: If provided, this token is automatically attached as X-Fusabase-AppTrust
-    // on eligible SDK requests.
-    const appTrustToken = process.env.FUSABASE_APP_TRUST_TOKEN;
-    const initOptions = appTrustToken ? { ...options, appTrustToken } : options;
-    app = initializeApp({...options,appTrustToken:"APP_TRUST_TOKEN"}, "test");
+    app = initializeApp(
+      appTrustToken ? { ...options, appTrustToken } : options,
+      "auth-test"
+    );
     setLogLevel(LogLevel.ERROR);
     auth_c = getAuth(app);
   });
@@ -96,13 +95,12 @@ describe("fusabase Auth Tests", function () {
       expect(app.options.authID).to.equal(options.auth_id);
     });
 
-    it("should include appTrustToken in app options when FUSABASE_APP_TRUST_TOKEN is set", function () {
-      const tok = process.env.FUSABASE_APP_TRUST_TOKEN;
-      if (!tok) {
-        expect((app.options || {}).appTrustToken).to.be.undefined;
+    it("should include appTrustToken in app options when configured", function () {
+      if (!appTrustToken) {
+        expect((app.options || {}).appTrustToken).to.be.null;
         return;
       }
-      expect((app.options || {}).appTrustToken).to.equal(tok);
+      expect((app.options || {}).appTrustToken).to.equal(appTrustToken);
     });
   });
 

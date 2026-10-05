@@ -171,6 +171,10 @@ export function updateProfile(
  * @async
  * @param {AuthCredential} credential - The auth credential to link with.
  * @returns {Promise<UserCredential>} A promise that resolves with the user credential.
+ * @example
+ * ```ts
+ * const result = await linkWithCredential(user, credential);
+ * ```
  */
 export function linkWithCredential(user: User, credential: AuthCredential): Promise<UserCredential> {
     return user.linkWithCredential(credential);
@@ -181,6 +185,10 @@ export function linkWithCredential(user: User, credential: AuthCredential): Prom
  * @async
  * @param {Object} provider - The auth provider instance (e.g., GoogleAuthProvider).
  * @returns {Promise<void>}
+ * @example
+ * ```ts
+ * await linkWithRedirect(user, provider);
+ * ```
  */
 export function linkWithRedirect(user: User, provider: AuthProvider, resolver?: PopupRedirectResolver): Promise<never> {
     return user.linkWithRedirect(provider);
@@ -191,6 +199,10 @@ export function linkWithRedirect(user: User, provider: AuthProvider, resolver?: 
  * @async
  * @param {Object} provider - The auth provider instance (e.g., GoogleAuthProvider).
  * @returns {Promise<UserCredential>} A promise that resolves with the user credential or null.
+ * @example
+ * ```ts
+ * const result = await linkWithPopup(user, provider);
+ * ```
  */
 export function linkWithPopup(user: User, provider: AuthProvider, resolver?: PopupRedirectResolver): Promise<UserCredential> {
     return user.linkWithPopup(provider);
@@ -201,6 +213,10 @@ export function linkWithPopup(user: User, provider: AuthProvider, resolver?: Pop
  * @async
  * @param {string} providerId - The ID of the provider to unlink.
  * @returns {Promise<User>} The updated user object.
+ * @example
+ * ```ts
+ * const updated = await unlink(user, 'example-provider');
+ * ```
  */
 export function unlink(user: User, providerId: string): Promise<User> {
     return user.unlink(providerId);

@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OracleDB Offline Flow Examples</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --ink: #182133;
+      --muted: #5e6a7d;
+      --panel: #ffffff;
+      --border: #d7deea;
+      --api: #eaf6ef;
+      --core: #fff3d3;
+      --local: #efe9ff;
+      --remote: #ffe8e6;
+      --backend: #e8f6f7;
+      --user: #e8f0ff;
+      --warn: #fff8e8;
+      --ok: #eaf8ed;
+      --bad: #fff0f0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 32px 18px 56px;
+    }
+
+    h1, h2, h3 { line-height: 1.2; margin: 0; }
+    h1 { font-size: 32px; margin-bottom: 8px; }
+    h2 { font-size: 24px; margin-top: 34px; margin-bottom: 14px; }
+    h3 { font-size: 17px; margin-bottom: 8px; }
+
+    p { color: var(--muted); margin: 8px 0; }
+
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    code {
+      background: #edf1f6;
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+
+    pre {
+      margin: 10px 0 0;
+      background: #f3f6fb;
+      color: #111827;
+      border: 1px solid #c9d3e2;
+      border-radius: 6px;
+      padding: 12px;
+      overflow-x: auto;
+      font-size: 13px;
+    }
+
+    pre code {
+      background: transparent;
+      color: #111827;
+      padding: 0;
+      border-radius: 0;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+      margin-top: 14px;
+    }
+
+    .example-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .tag {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 7px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 10px 14px;
+      margin-top: 12px;
+    }
+
+    .actor {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 9px;
+      font-weight: 650;
+      min-height: 44px;
+    }
+
+    .actor.user { background: var(--user); }
+    .actor.api { background: var(--api); }
+    .actor.core { background: var(--core); }
+    .actor.local { background: var(--local); }
+    .actor.remote { background: var(--remote); }
+    .actor.backend { background: var(--backend); }
+
+    .step {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      background: #fff;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 3px;
+    }
+
+    .step p {
+      margin: 0;
+    }
+
+    .branch {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .branch .step.ok { background: var(--ok); }
+    .branch .step.warn { background: var(--warn); }
+    .branch .step.bad { background: var(--bad); }
+
+    .compact-list {
+      margin: 8px 0 0;
+      padding-left: 20px;
+      color: var(--muted);
+    }
+
+    .compact-list li { margin: 4px 0; }
+
+    .tasks {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .task {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 650;
+      height: 28px;
+      width: fit-content;
+      background: #f8fafc;
+    }
+
+    .status.todo { background: #fff8e8; }
+    .status.ready { background: #eaf8ed; }
+    .status.progress { background: #e8f0ff; }
+
+    .map {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .component {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 11px;
+      background: #fff;
+    }
+
+    .component strong { display: block; }
+    .component small { color: var(--muted); }
+
+    @media (max-width: 760px) {
+      main { padding: 24px 12px 40px; }
+      .timeline { grid-template-columns: 1fr; }
+      .task { grid-template-columns: 1fr; }
+      .actor { min-height: auto; }
+      .branch, .map { grid-template-columns: 1fr; }
+      .example-title { display: block; }
+      .tag { display: inline-block; margin-top: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>OracleDB Offline Support By Example</h1>
+    <p>This page explains the offline architecture using concrete SDK calls. The detailed requirements are in <code>offlineprogress.md</code>.</p>
+
+    <section class="card">
+      <h2 style="margin-top:0">The Components In Plain Terms</h2>
+      <p>Think of the offline system as four cooperating parts:</p>
+      <div class="map">
+        <div class="component" style="background:var(--api)">
+          <strong>Public API</strong>
+          <small><code>addDoc</code>, <code>setDoc</code>, <code>getDocs</code>, <code>onSnapshot</code>. These parse user input and create internal mutations or queries.</small>
+        </div>
+        <div class="component" style="background:var(--core)">
+          <strong>OfflineSyncCoordinator</strong>
+          <small>The traffic controller. It decides what goes to local cache, what goes to ORDS, and when listeners/promises are resolved.</small>
+        </div>
+        <div class="component" style="background:var(--local)">
+          <strong>OfflineLocalStore</strong>
+          <small>IndexedDB-backed local state: cached docs, queued writes, optimistic overlays, active query metadata.</small>
+        </div>
+        <div class="component" style="background:var(--remote)">
+          <strong>OfflineRemoteStore</strong>
+          <small>Network side: sends writes, replays queued batches, listens over WebSocket/long polling, handles retries and backend errors.</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="example-title">
+        <h2 style="margin-top:0">Example 1: User Adds A City While Offline</h2>
+        <span class="tag">offline-safe addDoc</span>
+      </div>
+      <p>The user is offline and adds a city with a known ID. This can internally behave like <code>setDoc(doc(collectionRef, id), data)</code>, but with create-only semantics.</p>
+      <pre><code>await addDoc(collection(db, "cities"), "SF", {
+  name: "San Francisco",
+  population: 873965
+});</code></pre>
+
+      <div class="timeline">
+        <div class="actor user">Application</div>
+        <div class="step">
+          <strong>Calls the API</strong>
+          <p>The app calls <code>addDoc(collection(db, "cities"), "SF", data)</code>. The ID is known before any backend call.</p>
+        </div>
+
+        <div class="actor api">Public API</div>
+        <div class="step">
+          <strong>Creates a mutation</strong>
+          <p>The SDK creates a document path <code>cities/SF</code> and a create-only set mutation with precondition <code>exists(false)</code>.</p>
+        </div>
+
+        <div class="actor core">OfflineSyncCoordinator</div>
+        <div class="step">
+          <strong>Starts a local write</strong>
+          <p>The write is handed to <code>OfflineSyncCoordinator.write()</code>. The returned promise stays pending until ORDS confirms or rejects the write.</p>
+        </div>
+
+        <div class="actor local">OfflineLocalStore</div>
+        <div class="step">
+          <strong>Queues and applies locally</strong>
+          <p>The mutation is stored in IndexedDB's mutation queue. An optimistic overlay makes <code>cities/SF</code> visible in local reads and listeners.</p>
+        </div>
+
+        <div class="actor user">Application</div>
+        <div class="step">
+          <strong>Immediately sees pending data</strong>
+          <p>Listeners fire with the new city. Snapshot metadata says <code>hasPendingWrites=true</code>.</p>
+        </div>
+
+        <div class="actor remote">OfflineRemoteStore</div>
+        <div class="step">
+          <strong>Waits for network</strong>
+          <p>Because the device is offline, the write remains queued. No ORDS request is sent yet.</p>
+        </div>
+      </div>
+
+      <div class="branch">
+        <div class="step ok">
+          <strong>Later: ORDS accepts</strong>
+          <p>SDK stores returned <code>version</code>, clears the overlay, emits <code>hasPendingWrites=false</code>, and resolves the promise.</p>
+        </div>
+        <div class="step bad">
+          <strong>Later: ORDS rejects</strong>
+          <p>SDK rolls back <code>cities/SF</code>, emits a removal/revert event, and rejects the promise.</p>
+        </div>
+        <div class="step warn">
+          <strong>Still offline</strong>
+          <p>The city remains visible as pending. The mutation stays in IndexedDB.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="example-title">
+        <h2 style="margin-top:0">Example 2: User Increments A Counter Offline</h2>
+        <span class="tag">field transforms</span>
+      </div>
+      <pre><code>await updateDoc(doc(db, "cities", "SF"), {
+  visits: increment(1),
+  updatedAt: serverTimestamp()
+});</code></pre>
+
+      <div class="timeline">
+        <div class="actor api">Public API</div>
+        <div class="step">
+          <strong>Separates normal fields from transforms</strong>
+          <p>The SDK stores <code>increment(1)</code> and <code>serverTimestamp()</code> as field transforms, not plain values.</p>
+        </div>
+
+        <div class="actor local">OfflineLocalStore</div>
+        <div class="step">
+          <strong>Applies local estimates</strong>
+          <p><code>visits</code> is incremented from the cached value. <code>updatedAt</code> stores local write time plus previous value.</p>
+        </div>
+
+        <div class="actor user">Application</div>
+        <div class="step">
+          <strong>Controls timestamp display</strong>
+          <p>The app can read pending timestamps as <code>estimate</code>, <code>previous</code>, or <code>none</code>.</p>
+          <pre><code>docSnap.data({ serverTimestamps: "estimate" });
+docSnap.data({ serverTimestamps: "previous" });
+docSnap.data({ serverTimestamps: "none" });</code></pre>
+        </div>
+
+        <div class="actor backend">ORDS</div>
+        <div class="step">
+          <strong>Returns authoritative transform results</strong>
+          <p>On acknowledgement, ORDS returns final values in <code>transformResults</code>. The SDK replaces local estimates.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="example-title">
+        <h2 style="margin-top:0">Example 3: User Reads Cities While Offline</h2>
+        <span class="tag">cache vs server</span>
+      </div>
+      <pre><code>const snap = await getDocs(collection(db, "cities"));</code></pre>
+
+      <div class="timeline">
+        <div class="actor core">OfflineSyncCoordinator</div>
+        <div class="step">
+          <strong>Checks network and source</strong>
+          <p>Default <code>getDocs()</code> uses server when online. If offline, it falls back to cache.</p>
+        </div>
+
+        <div class="actor local">OfflineLocalStore</div>
+        <div class="step">
+          <strong>Returns cached results</strong>
+          <p>The SDK returns whatever matching docs it has locally. The result may be incomplete.</p>
+        </div>
+
+        <div class="actor user">Application</div>
+        <div class="step">
+          <strong>Reads metadata</strong>
+          <p>The snapshot has <code>fromCache=true</code>. That tells the app the result may be stale or partial.</p>
+        </div>
+      </div>
+
+      <div class="branch">
+        <div class="step">
+          <strong>Exact server read</strong>
+          <p>Use <code>getDocsFromServer(query)</code>. It rejects while offline.</p>
+        </div>
+        <div class="step">
+          <strong>Explicit local read</strong>
+          <p>Use <code>getDocsFromCache(query)</code>. It never contacts ORDS.</p>
+        </div>
+        <div class="step">
+          <strong>Default read</strong>
+          <p>Use <code>getDocs(query)</code>. Online: server. Offline: cache.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="example-title">
+        <h2 style="margin-top:0">Example 4: Listener Sees Pending Then Confirmed Data</h2>
+        <span class="tag">onSnapshot</span>
+      </div>
+      <pre><code>onSnapshot(collection(db, "cities"), { includeMetadataChanges: true }, snap => {
+  render(snap.docs, {
+    fromCache: snap.metadata.fromCache,
+    hasPendingWrites: snap.metadata.hasPendingWrites
+  });
+});</code></pre>
+
+      <div class="timeline">
+        <div class="actor local">OfflineLocalStore</div>
+        <div class="step">
+          <strong>Initial local view</strong>
+          <p>The listener first receives the current cache view, including pending overlays.</p>
+        </div>
+
+        <div class="actor remote">OfflineRemoteStore</div>
+        <div class="step">
+          <strong>Remote listen when online</strong>
+          <p>The SDK uses WebSocket or long polling. If reconnecting without resume tokens, it refetches the query.</p>
+        </div>
+
+        <div class="actor backend">ORDS</div>
+        <div class="step">
+          <strong>Sends server state</strong>
+          <p>Server documents include versions. The SDK updates the cache and emits another snapshot.</p>
+        </div>
+
+        <div class="actor user">Application</div>
+        <div class="step">
+          <strong>UI can show state changes</strong>
+          <p>A row can show "Saving..." while <code>hasPendingWrites=true</code>, then become normal after acknowledgement.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="example-title">
+        <h2 style="margin-top:0">Example 5: Batch Write While Offline</h2>
+        <span class="tag">ORDS transaction flow</span>
+      </div>
+      <pre><code>const batch = writeBatch(db);
+batch.set(doc(db, "cities", "SF"), { name: "San Francisco" });
+batch.update(doc(db, "stats", "cities"), { count: increment(1) });
+await batch.commit();</code></pre>
+
+      <div class="timeline">
+        <div class="actor local">OfflineLocalStore</div>
+        <div class="step">
+          <strong>Stores one local OfflineWriteBatch</strong>
+          <p>Both writes are one atomic local batch. Listeners see both optimistic changes together.</p>
+        </div>
+
+        <div class="actor remote">OfflineRemoteStore</div>
+        <div class="step">
+          <strong>Replays when online</strong>
+          <p>The SDK creates an ORDS transaction ID, then sends each operation as the same normal write call shape with that transaction ID.</p>
+        </div>
+
+        <div class="actor backend">ORDS</div>
+        <div class="step">
+          <strong>Returns provisional versions per operation</strong>
+          <p>Each operation returns <code>documentId</code> and <code>version</code>, but those versions are not applied as committed yet.</p>
+        </div>
+
+        <div class="actor backend">ORDS</div>
+        <div class="step">
+          <strong>Commit decides durability</strong>
+          <p>Only after final transaction commit succeeds does the SDK apply collected versions and clear pending writes. If anything fails permanently, abort and rollback the whole local batch.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin-top:0">Backend Requirements From These Examples</h2>
+      <ul class="compact-list">
+        <li>Single writes return <code>documentId</code> and <code>version</code>; ideally also <code>updateTime</code>, <code>commitTime</code>, and <code>transformResults</code>.</li>
+        <li>Create-only precondition is needed for offline-safe <code>addDoc(collectionRef, id, data)</code>.</li>
+        <li>Update precondition is needed for <code>updateDoc</code> against missing docs.</li>
+        <li>Permanent errors must be machine-readable so the SDK can rollback.</li>
+        <li>Retryable errors must be distinguishable so the SDK keeps mutations queued.</li>
+        <li>Batch writes keep current ORDS transaction behavior: operation calls return provisional versions, final commit confirms durability.</li>
+        <li>Query results should include document versions for cache reconciliation.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2 style="margin-top:0">Progress / Task List</h2>
+      <p>Use this as the high-level implementation checklist.</p>
+
+      <div class="tasks">
+        <div class="task">
+          <span class="status ready">Decided</span>
+          <div>
+            <strong>Offline API behavior</strong>
+            <p>Offline is opt-in. Browser default is IndexedDB. Memory persistence is explicit fallback/testing mode.</p>
+          </div>
+        </div>
+
+        <div class="task">
+          <span class="status ready">Decided</span>
+          <div>
+            <strong>Offline-safe addDoc</strong>
+            <p><code>addDoc(collectionRef, id, data)</code> requires a known ID and can route through the same mutation path as <code>setDoc</code> with create-only precondition.</p>
+          </div>
+        </div>
+
+        <div class="task">
+          <span class="status ready">Decided</span>
+          <div>
+            <strong>Read source behavior</strong>
+            <p><code>getDocs()</code> returns cache while offline with <code>fromCache=true</code>. Exact server reads use <code>getDocsFromServer()</code>. Explicit local reads use <code>getDocsFromCache()</code>.</p>
+          </div>
+        </div>
+
+        <div class="task">
+          <span class="status ready">Decided</span>
+          <div>
+            <strong>Transform behavior</strong>
+            <p>Follow transform handling: local estimates first, backend <code>transformResults</code> reconciliation after acknowledgement.</p>
+          </div>
+        </div>
+
+        <div class="task">
+          <span class="status ready">Decided</span>
+          <div>
+            <strong>Batch write behavior</strong>
+            <p>Use current ORDS transaction flow. Store one local atomic mutation batch, replay each operation under one transaction ID, apply versions only after final commit.</p>
+          </div>
+        </div>
+
+        <div class="task">
+          <span class="status todo">Todo</span>
+          <div>
+            <strong>Phase 1: Define classes, methods, and directories</strong>
+            <p>Create the offline architecture skeleton only: directories under <code>local</code>, <code>model</code>, <code>core</code>, and <code>remote</code>; class/interface definitions; public API stubs; method contracts. No offline behavior changes yet.</p>
+          </div>
+        </div>
+
+        <div class="task">
+          <span class="status ready">Done</span>
+          <div>
+            <strong>Phase 2: Local cache reads</strong>
+            <p>Memory and IndexedDB document persistence, <code>OfflineDocumentCache</code>, cache snapshots, <code>getDocFromCache</code>, <code>getDocsFromCache</code>, simple cache filtering/order/limit, server-read cache population, and default cache reads while SDK network is disabled or the browser is offline are wired.</p>
+          </div>
+        </div>
+
+        <div class="task">
+          <span class="status ready">Done</span>
+          <div>
+            <strong>Phase 3: Offline write queue</strong>
+            <p>Mutation batches persist in memory/IndexedDB; offline <code>setDoc</code>, <code>updateDoc</code>, <code>deleteDoc</code>, and known-ID <code>addDoc</code> apply optimistic cache state; replay runs on <code>enableNetwork</code> or browser reconnect; success clears pending state, retryable failures stay queued, and permanent failures rollback.</p>
+          </div>
+        </div>
+
+        <div class="task">
+          <span class="status ready">Done</span>
+          <div>
+            <strong>Phase 4: Snapshot metadata</strong>
+            <p>Cache snapshots expose <code>fromCache=true</code>; pending local documents expose <code>hasPendingWrites=true</code>; query snapshots aggregate pending state; server cache population preserves pending local metadata until replay acknowledgement or rollback.</p>
+          </div>
+        </div>
+
+        <div class="task">
+          <span class="status ready">Done</span>
+          <div>
+            <strong>Phase 5: Listener integration</strong>
+            <p><code>OfflineEventHub</code> now emits initial cached snapshots, optimistic local write snapshots, acknowledgement snapshots, and rollback snapshots. Metadata-only events follow <code>includeMetadataChanges</code>. Offline-enabled public <code>onSnapshot</code> uses this cache-backed path.</p>
+          </div>
+        </div>
+
+        <div class="task">
+          <span class="status ready">Done</span>
+          <div>
+            <strong>Phase 6: Network controls</strong>
+            <p><code>enableNetwork</code> and <code>disableNetwork</code> pause/resume replay and listener metadata. Browser connectivity events pause/resume replay, retryable failures stay queued, and replay retries use exponential backoff.</p>
+          </div>
+        </div>
+
+        <div class="task">
+          <span class="status ready">Done</span>
+          <div>
+            <strong>Phase 7: Batch writes and transactions</strong>
+            <p>Offline <code>WriteBatch.commit()</code> persists all operations as one local batch, applies optimistic changes together, replays under one ORDS transaction name, clears all pending state on acknowledgement, rolls back the whole batch on permanent failure, and keeps the whole batch queued on retryable failure.</p>
+          </div>
+        </div>
+
+        <div class="task">
+          <span class="status ready">Done</span>
+          <div>
+            <strong>Phase 8: Multi-tab and garbage collection</strong>
+            <p>Primary-tab lease coordination runs when <code>synchronizeTabs</code> is enabled, so only the primary tab replays writes. Cached documents carry LRU sequence numbers, memory/IndexedDB persistence honor <code>cacheSizeBytes</code>, pending documents are preserved, and <code>persistentLocalCache()</code> exposes cache sizing.</p>
+          </div>
+        </div>
+
+        <div class="task">
+          <span class="status todo">Backend</span>
+          <div>
+            <strong>Backend requirements</strong>
+            <p>Confirm structured error codes, create/update preconditions, transform results, query document versions, and optional commit marker from transaction commit.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

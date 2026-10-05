@@ -1,8 +1,19 @@
-# Oracle® Backend for Firebase (Fusabase) JavaScript SDK
+<br />
+<p align="center">
+  <img src="assets/fusabase-color.svg" alt="Fusabase logo" width="180" />
+</p>
 
-A modular JavaScript SDK for Oracle Backend for Firebase (Fusabase) that provides authentication, document database, storage, App Trust, vector search, and UI component capabilities.
+<h1 align="center">Oracle Backend with Firebase APIs (Fusabase) JavaScript SDK</h1>
 
-This Oracle Backend for Firebase JavaScript SDK follows the Firebase design, API patterns, and rules-based authorization model. Its SDK interfaces are designed to mirror the Firebase SDK interfaces so developers can move across backends with minimal changes. This Oracle Backend for Firebase JavaScript SDK is a distinct Oracle offering.
+<p align="center">
+  <a href="https://docs.oracle.com/en/database/oracle/backend-for-firebase/26.1/index.html">Guides</a>
+  ·
+  <a href="https://livelabs.oracle.com/ords/r/dbpm/livelabs/view-workshop?wid=4404&amp;clear=180,RR&amp;session=117297029571778">Free Workshop</a>
+</p>
+
+A modular JavaScript SDK for Oracle Backend with Firebase APIs (Fusabase) that provides authentication, document database, storage, App Trust, vector search, and UI component capabilities.
+
+This Oracle Backend with Firebase APIs JavaScript SDK follows the Firebase design, API patterns, and rules-based authorization model. Its SDK interfaces are designed to mirror the Firebase SDK interfaces so developers can move across backends with minimal changes. This Oracle Backend with Firebase APIs JavaScript SDK is a distinct Oracle offering.
 
 ## Prerequisites
 
@@ -17,6 +28,8 @@ Install the JavaScript Modular SDK package:
    npm install fusabase
    ```
 
+The package provides app setup, authentication, document data, storage, UI, App Trust, and browser offline data access through these public imports: `fusabase/app`, `fusabase/auth`, `fusabase/oracledb`, `fusabase/storage`, `fusabase/ui`, and `fusabase/app-trust`.
+
 ## Usage
 
 Here are examples of how to import and use the Fusabase SDK modules in your browser application.
@@ -30,6 +43,7 @@ const app = initializeApp({
   // required
   ords_host: 'https://your-ords-host/ords/your-schema/',
   schema: 'your-schema',
+  app_type: 'WEB',
   app_id: 'your-app-id',
   project_id: 'your-project-id',
   objs_type: 'dbfs',                // your objects type (e.g. 'dbfs')
@@ -132,6 +146,89 @@ const q = query(
 const snaps = await getDocs(q);
 snaps.forEach((snap) => console.log(snap.id, snap.data()));
 ```
+
+### Offline Use (Browser)
+
+Enable offline support once after creating the database instance, before reads, writes, or listeners. Choose one persistence setup for an instance; a later setup call replaces the current offline configuration.
+
+#### Persistent browser cache
+
+`enableOffline(db, options?)` is the general setup API. Without options, it uses a persistent browser cache. Use `persistentLocalCache` to configure its size or coordinate multiple browser tabs.
+
+```javascript
+import {
+  enableOffline,
+  getOracledb,
+  persistentLocalCache
+} from 'fusabase/oracledb';
+
+const db = getOracledb(app);
+
+await enableOffline(
+  db,
+  persistentLocalCache({
+    cacheSizeBytes: 10 * 1024 * 1024,
+    synchronizeTabs: true
+  })
+);
+```
+
+Use `enableIndexedDbPersistence(db)` when the default persistent browser cache is sufficient:
+
+```javascript
+import { enableIndexedDbPersistence, getOracledb } from 'fusabase/oracledb';
+
+const db = getOracledb(app);
+await enableIndexedDbPersistence(db);
+```
+
+This cache survives page reloads and requires a browser environment with IndexedDB support.
+
+#### In-memory cache
+
+Use `enableMemoryPersistence(db)` when cached data should only live for the current page or process. Its data is discarded when the page or process ends.
+
+```javascript
+import { enableMemoryPersistence, getOracledb } from 'fusabase/oracledb';
+
+const db = getOracledb(app);
+await enableMemoryPersistence(db);
+```
+
+#### Reading, writing, and reconnecting
+
+Once enabled, use the normal read, write, and listener APIs. If connectivity is unavailable, cached reads are used where available and writes are queued for later synchronization.
+
+```javascript
+import {
+  collection,
+  disableNetwork,
+  doc,
+  enableNetwork,
+  getDocFromCache,
+  setDoc,
+  waitForPendingWrites
+} from 'fusabase/oracledb';
+
+const recipe = doc(collection(db, 'recipes'), 'tea');
+
+await disableNetwork(db);
+await setDoc(recipe, { title: 'Tea', ratingCount: 0 });
+
+const cached = await getDocFromCache(recipe);
+console.log(cached.data());
+
+await enableNetwork(db);
+await waitForPendingWrites(db);
+```
+
+`getDocFromCache` and `getDocsFromCache` require offline support and read only local data. `waitForPendingWrites` resolves after writes queued before the call are acknowledged or rejected.
+
+With offline support enabled, write promises resolve after the local cache is updated. Use `waitForPendingWrites(db)` after reconnecting when the next step requires server acknowledgement. `onSnapshot` with `{ includeMetadataChanges: true }` exposes `snapshot.metadata.fromCache` and `snapshot.metadata.hasPendingWrites`.
+
+Cached queries support ordinary filters, ordering, and limits, but not joins, aggregates, vector search, or composite filters. Transactions still require the server. `clearIndexedDbPersistence(db)` discards cached data and queued writes; call it only when that local data should be removed.
+
+See [the offline API guide](agent_docs/offline.md) for all setup options and limitations.
 
 ### Vector Search (Browser)
 
@@ -334,7 +431,7 @@ Generate TypeDoc documentation:
 npm run docs
 ```
 
-The documentation will be generated in the `docs/` directory.
+The documentation will be generated in `docs/api-reference/`.
 
 ## Building the Project
 
@@ -372,7 +469,7 @@ Integration tests are run against a separate test application using the publishe
 
 1. In a separate test application, include `"fusabase": "*"` in `package.json` to fetch the latest from artifactory.
 
-   Note: Use `^26.1.0` if you want to pin to major release `26.1.0`.
+   Note: Use `26.3.0` if you need this exact release.
 2. Install the dependencies:
    ```bash
    npm install
@@ -413,7 +510,7 @@ Integration tests are run against a separate test application. Follow these step
 
 ## Trademarks
 
-Firebase is a trademark of Google LLC.  Use of the Firebase name here is solely to describe the design patterns and SDK interfaces that Oracle Backend for Firebase follows for developer familiarity and ease of migration; it does not imply any affiliation with or endorsement by Google.
+Firebase is a trademark of Google LLC.  Use of the Firebase name here is solely to describe the design patterns and SDK interfaces that Oracle Backend with Firebase APIs follows for developer familiarity and ease of migration; it does not imply any affiliation with or endorsement by Google.
 
 ## Contributing
 

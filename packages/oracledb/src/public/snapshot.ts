@@ -32,11 +32,18 @@ import { DualityViewColReference, Query } from "../collection/reference.js";
 import { SnapshotListenOptions, Unsubscribe } from "../types/snapshot.js";
 import { DocumentReference, DualityViewDocReference } from "../document/reference.js";
 import { CollectionReference } from "../collection/reference.js";
+import { _listenOfflineIfEnabled } from "./offline.js";
 
- /* Returns true if two snapshots (QuerySnapshot or DocumentSnapshot) are logically equal.
+/**
+ * Returns true if two snapshots are logically equal.
+ *
  * @param left - A DocumentSnapshot or QuerySnapshot to compare.
  * @param right - A DocumentSnapshot or QuerySnapshot to compare.
  * @returns true if the snapshots are equal.
+ * @example
+ * ```ts
+ * const same = snapshotEqual(firstSnapshot, secondSnapshot);
+ * ```
  */
 export function snapshotEqual<
   AppModelType,
@@ -49,6 +56,19 @@ export function snapshotEqual<
 }
 
 
+/**
+ * Subscribes to snapshot updates for a query, collection, or document reference.
+ *
+ * @param ref - The target to observe.
+ * @param params - Listener options and callbacks accepted by the overloads.
+ * @returns A function that stops the listener.
+ * @example
+ * ```ts
+ * const unsubscribe = onSnapshot(users, snapshot => {
+ *   console.log(snapshot.docs.length);
+ * });
+ * ```
+ */
 export function onSnapshot<AppModelType, DbModelType extends DocumentData>
 (query: Query<AppModelType, DbModelType>, observer: {
     next?: (snapshot: QuerySnapshot<AppModelType, DbModelType>) => void;
@@ -99,5 +119,47 @@ export function onSnapshot<AppModelType, DbModelType extends DocumentData>(
     throw oracledbErrorHandler(error);
   }
 
+  const offline = tryOfflineSnapshot(ref as any, params);
+  if (offline) return offline;
   return (ref as any).onSnapshot(...params);
+}
+
+function tryOfflineSnapshot(ref: any, params: any[]): Unsubscribe | null {
+  if (ref instanceof DualityViewColReference || ref instanceof DualityViewDocReference) {
+    return null;
+  }
+  const { options, observer } = parseSnapshotParams(params);
+  return _listenOfflineIfEnabled(ref, options, observer as any);
+}
+
+function parseSnapshotParams(params: any[]): {
+  options: SnapshotListenOptions;
+  observer: {
+    next: (snapshot: any) => void;
+    error?: (error: Error) => void;
+  };
+} {
+  let options: SnapshotListenOptions = {};
+  let callbacks: any[] = params;
+  if (params[0] && typeof params[0] === 'object' && !('next' in params[0]) && typeof params[0] !== 'function') {
+    options = params[0];
+    callbacks = params.slice(1);
+  }
+  const first = callbacks[0];
+  if (typeof first === 'function') {
+    return {
+      options,
+      observer: {
+        next: first,
+        error: callbacks[1],
+      },
+    };
+  }
+  return {
+    options,
+    observer: {
+      next: first?.next?.bind(first),
+      error: first?.error?.bind(first),
+    },
+  };
 }

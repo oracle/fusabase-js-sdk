@@ -66,6 +66,14 @@ export declare function addDoc<
   reference: CollectionReference<AppModelType, DbModelType>,
   data: WithFieldValue<AppModelType>
 ): Promise<DocumentReference<AppModelType, DbModelType>>;
+export declare function addDoc<
+  AppModelType,
+  DbModelType extends DocumentData
+>(
+  reference: CollectionReference<AppModelType, DbModelType>,
+  id: string,
+  data: WithFieldValue<AppModelType>
+): Promise<DocumentReference<AppModelType, DbModelType>>;
 
 
 /**

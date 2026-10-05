@@ -34,6 +34,19 @@ import { FieldPath } from "../field/path.js";
 import { LogLevel } from "../../../logger/LogLevel.js";
 import { SetOptions } from "../types/common.js";
 import { WithFieldValue } from "../types/data.js";
+import {
+  OfflineDeleteWrite,
+  OfflinePatchWrite,
+  OfflineSetWrite,
+  OracledbDocumentKey,
+  OracledbWritePrecondition,
+} from "../model/index.js";
+import {
+  _assertServerReadable,
+  _ensureDocumentCachedForWrite,
+  _isOfflineEnabled,
+  _writeLocallyIfEnabled,
+} from "../public/offline.js";
 
 export class Transaction {
   #name: string | null = null;
@@ -85,6 +98,7 @@ export class Transaction {
       options: null,
       version: null,
     });
+    _assertServerReadable(docRef.oracledb);
     const res = await docRef.get({ source: 'server' }, trans_obj);
     this.#versions[docRef.path] = (res as any).__version;
     return res as any;
@@ -249,6 +263,10 @@ export class Transaction {
     if (j < 0) {
       this.#status = -1;
       return null;
+    }
+    const firstWrite = this.#operations.find(operation => operation.method !== "get");
+    if (firstWrite?.docRef instanceof DocumentReference) {
+      _assertServerReadable(firstWrite.docRef.oracledb);
     }
     for (let i = 0; i < j; i++) {
       if (this.#operations[i].method === "get") {
@@ -506,6 +524,19 @@ update<AppModelType, DbModelType extends DocumentData>(
    * @returns A promise that resolves when the commit is complete.
    */
   async commit(): Promise<void> {
+    if (this.#operations.length > 0) {
+      const firstRef = this.#operations[0].docRef;
+      if (firstRef instanceof DocumentReference && _isOfflineEnabled(firstRef.oracledb)) {
+        for (const operation of this.#operations) {
+          const options = operation.setOptions ?? operation.options ?? {};
+          if (operation.method === "update" ||
+            (operation.method === "set" && (options.merge || (options.mergeFields?.length ?? 0) > 0))) {
+            await _ensureDocumentCachedForWrite(operation.docRef);
+          }
+        }
+        return queueOperationsLocally(firstRef.oracledb, this.#operations);
+      }
+    }
     const idx = await this.__makeOperations();
     if (idx === null) return;
     const trans_obj = {
@@ -534,5 +565,49 @@ update<AppModelType, DbModelType extends DocumentData>(
       default:
         Utils.baasLogger(LogLevel.ERROR, "incorrect");
     }
+  }
+}
+
+async function queueOperationsLocally(db: any, operations: any[]): Promise<void> {
+  const mutations = operations.map(operation => operationToOfflineMutation(operation));
+  await _writeLocallyIfEnabled(db, mutations, 'writeBatch');
+}
+
+function operationToOfflineMutation(operation: any): OfflineSetWrite | OfflinePatchWrite | OfflineDeleteWrite {
+  const key = OracledbDocumentKey.fromPath(operation.docRef.path);
+  switch (operation.method) {
+    case "set": {
+      const data = operation.docRef.converter
+        ? operation.docRef.converter.toOracledb(operation.data)
+        : operation.data;
+      const options = operation.setOptions ?? operation.options ?? {};
+      if (options.merge || (options.mergeFields?.length ?? 0) > 0) {
+        return new OfflinePatchWrite(
+          key,
+          data,
+          options.mergeFields?.length ? options.mergeFields : Object.keys(data),
+          OracledbWritePrecondition.exists(true)
+        );
+      }
+      return new OfflineSetWrite(
+        key,
+        data,
+        OracledbWritePrecondition.none()
+      );
+    }
+    case "update":
+      return new OfflinePatchWrite(
+        key,
+        operation.data,
+        Object.keys(operation.data),
+        OracledbWritePrecondition.exists(true)
+      );
+    case "delete":
+      return new OfflineDeleteWrite(
+        key,
+        OracledbWritePrecondition.none()
+      );
+    default:
+      throw new Error("Unsupported write operation");
   }
 }

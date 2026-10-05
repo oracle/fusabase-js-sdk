@@ -53,9 +53,13 @@ export class CustomEvent extends Event {
  * @internal
  */
 export async function getAccessToken(app: any): Promise<string | null> {
-  return app.auth().currentUser && app.auth().currentUser.getFUSABASEToken
-    ? await app.auth().currentUser.getFUSABASEToken()
-    : null;
+  let user: any = null;
+  try {
+    user = app.auth()?.currentUser;
+  } catch {
+    user = null;
+  }
+  return user && user.getFUSABASEToken ? await user.getFUSABASEToken() : null;
 }
 
 /**

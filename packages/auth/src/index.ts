@@ -26,6 +26,7 @@
 // 
 
 import { AuthError, ErrorCode } from "./errors.js";
+import { registerAuth } from "./register.js";
 import { beforeAuthStateChanged, getAuth, initializeAuth, setPersistence } from "./internal/core.js";
 import { AuthCredential, EmailAuthCredential, SAMLAuthCredential, UserCredential } from "./internal/credential.js";
 import { OAuthCredential } from "./internal/phone.js";
@@ -51,6 +52,8 @@ import { Persistence } from "./types/persistence.js";
 import { User, UserMetadata } from "./types/user.js";
 import { Config, ONPREMConfig, IDCSConfig } from "./helpers/config.js";
 import { linkWithCredential, linkWithRedirect, linkWithPopup, unlink } from "./public/user.js";
+
+registerAuth();
 
 export {getAuth, initializeAuth, createUserWithEmailAndPassword,
 signInWithCredential, signInWithPopup, signInWithRedirect, getRedirectResult,

@@ -27,9 +27,22 @@
 
 import { App } from "../../../app/src/public-types.js";
 import fusabase from "../../../app/src/fusabase-internal.js";
+import { _getProvider } from "../../../app/src/index.js";
 import { Oracledb } from "../internal/core.js";
 import { type OracledbSettings } from "../internal/settings.js";
 
+/**
+ * Initializes a database service instance for an application.
+ *
+ * @param app - The initialized application instance.
+ * @param settings - Optional settings applied before the instance is used.
+ * @param databaseId - Optional identifier for a named database.
+ * @returns The initialized database service instance.
+ * @example
+ * ```ts
+ * const db = initializeOracledb(app);
+ * ```
+ */
 export function initializeOracledb(
   app: App,
   settings?: OracledbSettings,
@@ -40,7 +53,9 @@ export function initializeOracledb(
     error.status = 400;
     throw error;
   }
-  const oracledb = fusabase.oracledb(app);
+  const oracledb = _getProvider<Oracledb>(app, 'oracledb').getImmediate({
+    identifier: databaseId
+  }) as Oracledb;
   if (settings) {
     oracledb?.settings(settings);
   }
@@ -48,9 +63,15 @@ export function initializeOracledb(
 }
 
 /**
- * Returns a Oracledb instance for the given Fusabase app.
- * If no app is provided, uses the default app from fusabase.
- * @param app - The Fusabase app instance. If not provided, uses fusabase.app().
+ * Gets a database service instance for an application.
+ *
+ * @param app - The application instance; the primary instance is used when omitted.
+ * @param databaseId - Optional identifier for a named database.
+ * @returns The database service instance.
+ * @example
+ * ```ts
+ * const db = getOracledb(app, 'primary');
+ * ```
  */
 export function getOracledb(app: App, databaseId: string): Oracledb;
 export function getOracledb(app?: App): Oracledb;
@@ -61,5 +82,7 @@ export function getOracledb(app?: App,  databaseId?: string): Oracledb {
     error.status = 400;
     throw error; // Use oracledbErrorHandler or similar if required
   }
-  return fusabase.oracledb(app) as any;
+  return _getProvider<Oracledb>(app, 'oracledb').getImmediate({
+    identifier: databaseId
+  }) as Oracledb;
 }
