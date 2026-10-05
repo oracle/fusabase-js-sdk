@@ -5,10 +5,12 @@
     "packages/storage/src/index.ts",
     "packages/oracledb/src/index.ts",
     "packages/app/src/index.ts",
+    "packages/app-trust/src/index.ts",
+    "packages/logger/LogLevel.ts",
     "packages/ui/src/index.ts"
   ],
   "out": "docs/api-reference",
-  "name": "Oracle® Backend For Firebase JavaScript Modular SDK Reference, Release 26.1.0",
+  "name": "Oracle® Backend with Firebase APIs JavaScript Modular SDK Reference, Release 26.3.0",
   "includeVersion": true,
   "excludePrivate": true,
   "excludeProtected": true,

@@ -36,11 +36,13 @@ const __dirname = path.dirname(__filename);
 // Target the TypeDoc output directory
 const docsDir = path.resolve(__dirname, '..', 'docs', 'api-reference');
 
+const documentTitle =
+  'Oracle® Backend with Firebase APIs JavaScript Modular SDK Reference, Release 26.3.0';
 const MARKER = '<!-- injected-custom-header -->';
 
 // Exact header HTML provided by request
 const headerInner =
-  '<b> Oracle&reg; Backend for Firebase JavaScript Modular SDK Reference <br>Release 26.1.0</b><br>G48196-02<br>';
+  '<b> Oracle&reg; Backend with Firebase APIs JavaScript Modular SDK Reference <br>Release 26.3.0</b><br>G62180-01<br>';
 
 // Wrap with layout-friendly container inside TypeDoc main container
 const headerBlock = `
@@ -66,6 +68,14 @@ ${FOOTER_MARKER}
 </div>
 `;
 
+// Keep the browser title aligned with the TypeDoc project title.
+function updateDocumentTitle(content) {
+  return content.replace(
+    /(<title(?:\s[^>]*)?>)[\s\S]*?(<\/title>)/i,
+    `$1${documentTitle}$2`
+  );
+}
+
 // Recursively collect all .html files under docsDir
 async function getHtmlFiles(dir) {
   const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -84,6 +94,7 @@ async function getHtmlFiles(dir) {
  // Inject headerBlock into a single HTML file, relocating if already present
 async function injectHeader(file) {
   let content = await fs.readFile(file, 'utf8');
+  content = updateDocumentTitle(content);
 
   const contentTag = '<div class="col-content">';
   const containerTag = '<div class="container container-main">';

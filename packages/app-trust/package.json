@@ -1,0 +1,19 @@
+{
+  "name": "@fusabase/app-trust",
+  "version": "26.3.0",
+  "type": "module",
+  "description": "Oracle® Backend with Firebase APIs App Trust package",
+  "main": "./src/index.js",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@fusabase/app": "26.3.0"
+  },
+  "dependencies": {
+    "tslib": "^2.8.1"
+  }
+}

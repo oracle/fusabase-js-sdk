@@ -35,6 +35,10 @@ import type { UploadMetadata, FullMetadata } from "./types.js";
  * @param data - The data to upload (Blob, ArrayBuffer, or Uint8Array).
  * @param metadata - Optional metadata for the upload.
  * @returns A promise that resolves with the upload result containing ref and metadata.
+ * @example
+ * ```ts
+ * const result = await uploadBytes(avatar, file, { contentType: file.type });
+ * ```
  */
 export async function uploadBytes(
   ref: StorageReference,
@@ -57,6 +61,11 @@ export async function uploadBytes(
  * @param data - The data to upload (Blob, ArrayBuffer, or Uint8Array).
  * @param metadata - Optional metadata for the upload.
  * @returns A promise that resolves with the UploadTask.
+ * @example
+ * ```ts
+ * const task = uploadBytesResumable(avatar, file);
+ * task.on('state_changed', snapshot => console.log(snapshot.bytesTransferred));
+ * ```
  */
 export function uploadBytesResumable(
   ref: StorageReference,

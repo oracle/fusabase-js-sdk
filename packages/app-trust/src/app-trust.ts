@@ -166,6 +166,19 @@ async function loadPersistedTokenIntoState(state: InternalState): Promise<void> 
   clearLegacyAppTokenMirrors(state.app);
 }
 
+/**
+ * Initializes the App Trust service for an application.
+ *
+ * @param app - The application instance to protect.
+ * @param options - Configuration containing the browser attestation provider.
+ * @returns The initialized App Trust instance.
+ * @example
+ * ```ts
+ * const trust = initializeAppTrust(app, {
+ *   provider: new ReCaptchaV3Provider('site-key')
+ * });
+ * ```
+ */
 export function initializeAppTrust(app: App | undefined, options: AppTrustOptions): AppTrust {
   if (!app) throw new FusabaseAppTrustError('App is required', { status: 400, code: 'app-trust/no-app' });
   if (APP_TRUST_INSTANCE.has(app)) {
@@ -186,6 +199,8 @@ export function initializeAppTrust(app: App | undefined, options: AppTrustOption
 
   try {
     (app as any)._appTrustInstance = instance;
+    (app as any)._getAppTrustToken = (forceRefresh?: boolean) =>
+      getToken(instance, forceRefresh);
   } catch {
     // ignore
   }
@@ -195,6 +210,17 @@ export function initializeAppTrust(app: App | undefined, options: AppTrustOption
   return instance;
 }
 
+/**
+ * Gets an attestation token, using a valid cached token when possible.
+ *
+ * @param appTrustInstance - The initialized App Trust instance.
+ * @param forceRefresh - Whether to request a new token even when a cached token is valid.
+ * @returns A promise that resolves with the token and its expiry time.
+ * @example
+ * ```ts
+ * const { token } = await getToken(trust);
+ * ```
+ */
 export async function getToken(appTrustInstance: AppTrust, forceRefresh: boolean = false): Promise<AppTrustTokenResult> {
   /**
    * Returns an FUSABASE App Trust token.
@@ -293,6 +319,18 @@ export async function getToken(appTrustInstance: AppTrust, forceRefresh: boolean
   return state.inFlight;
 }
 
+/**
+ * Subscribes to token changes for an App Trust instance.
+ *
+ * @param appTrustInstance - The initialized App Trust instance.
+ * @param observer - A callback or observer object that receives token updates and errors.
+ * @returns A function that removes the subscription.
+ * @example
+ * ```ts
+ * const unsubscribe = onTokenChanged(trust, token => console.log(token.token));
+ * // Later: unsubscribe();
+ * ```
+ */
 export function onTokenChanged(appTrustInstance: AppTrust, observer: Partial<Observer>): Unsubscribe;
 export function onTokenChanged(
   appTrustInstance: AppTrust,

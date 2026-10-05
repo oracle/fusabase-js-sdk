@@ -37,7 +37,7 @@ import { AggregateQuery } from './aggregate.js';
 import { deepEqual, extractCallbacksForSnapshot } from '../util/utils_helper.js';
 import { nullCheck } from '../util/utils.js';
 import { SnapshotMetadata } from '../listener/snapshot.js';
-import { QuerySnapshot } from './snapshot.js';
+import { QuerySnapshot, markQuerySnapshotAsFailedRequest } from './snapshot.js';
 import { IdTokenResult } from '../../../auth/src/types/idtoken.js';
 import { VectorSearch } from '../types/vector.js';
 import { normalizeLongPollingOptions } from '../internal/settings.js';
@@ -533,7 +533,12 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
       promJson = await this._queryHelper.fetchDocuments(this, access_token);
     } catch (err) {
       Utils.baasTrace(this.oracledb.app.logLevel);
-      return new QuerySnapshot([], this, new SnapshotMetadata(false, false));
+      const emptySnapshot = new QuerySnapshot<AppModelType, DbModelType>(
+        [],
+        this,
+        new SnapshotMetadata(false, false)
+      );
+      return markQuerySnapshotAsFailedRequest(emptySnapshot);
     }
 
     if (promJson) {
@@ -729,14 +734,18 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
 
       })
         .catch(e => {
-          var querySnap = new QuerySnapshot([], this,
-            new SnapshotMetadata(false, false));
-          handleSnapshot(querySnap);
+          this.oracledb.eventManager?.dispatchEvent?.(new Event("long polling error"));
+          if (callback.error) {
+            try {
+              callback.error(e);
+            } catch (ue) {
+              Utils.baasLogger(this.oracledb.app.logLevel, "Error in snapshot callback", ue);
+            }
+          }
         });
 
       const db = this.oracledb;
       const colRef = this;
-      const pollingIntervalMs = getLongPollingIntervalMs(db);
 
       //polling
       function startPolling() {
@@ -756,14 +765,12 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
 
               //index map for old documents
               let oldIndexMap:any = {};
-          
+
               for (let i = 0; i < querySnap._docs.length; i++) {
-                newVersionMap[querySnap._docs[i].id] = querySnap._docs[i]._otherMetadata["ASOF"] ?
-                 BigInt(querySnap._docs[i]._otherMetadata["ASOF"]) : querySnap._docs[i]._otherMetadata["VERSION"];
+                newVersionMap[querySnap._docs[i].id] = snapshotVersionMarker(querySnap._docs[i]);
               }
               for (let i = 0; i < oldQuerySnap._docs.length; i++) {
-                oldVersionMap[oldQuerySnap._docs[i].id] = oldQuerySnap._docs[i]._otherMetadata["ASOF"] ?
-                BigInt(oldQuerySnap._docs[i]._otherMetadata["ASOF"]) : oldQuerySnap._docs[i]._otherMetadata["VERSION"];
+                oldVersionMap[oldQuerySnap._docs[i].id] = snapshotVersionMarker(oldQuerySnap._docs[i]);
                 oldIndexMap[oldQuerySnap._docs[i].id] = i;
               }
 
@@ -771,7 +778,7 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
               let docsChanged = [];
               for (let i = 0; i < querySnap._docs.length; i++) {
                 if (Object.prototype.hasOwnProperty.call(oldVersionMap,
-                  querySnap._docs[i].id) && newVersionMap[querySnap._docs[i].id] >
+                  querySnap._docs[i].id) && newVersionMap[querySnap._docs[i].id] !==
                   oldVersionMap[querySnap._docs[i].id]) {
                   docsChanged.push({
                     doc: querySnap._docs[i],
@@ -818,10 +825,17 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
 
               oldQuerySnap = querySnap
 
-          }).catch(e => { Utils.baasLogger(db.app.logLevel, e) })
+          }).catch(e => {
+            db.eventManager?.dispatchEvent?.(new Event("long polling error"));
+            Utils.baasLogger(db.app.logLevel, e);
+          })
         }
 
-        let intervalId = setInterval(executeTask, pollingIntervalMs);
+        let intervalId = setInterval(
+          executeTask,
+          (db._settings.experimentalLongPollingOptions?.timeoutSeconds || 10) * 1000
+        );
+        // Continue to execute every 29 seconds
 
         // Return a function to stop the continuous execution
         return function stopExecution() {
@@ -1170,6 +1184,8 @@ export class DualityViewColReference<
   }
 }
 
-
-
-
+function snapshotVersionMarker(docSnap: any): string {
+  const metadata = docSnap?._otherMetadata ?? {};
+  const version = metadata["ASOF"] ?? metadata["VERSION"] ?? docSnap?.__version ?? "";
+  return String(version);
+}

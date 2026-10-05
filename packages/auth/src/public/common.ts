@@ -30,6 +30,19 @@ import { User } from "../types/user.js";
 import {ActionCodeInfo} from '../types/action-code.js';
 import { authErrorHandler,argCheck,typeStrings, AuthError, ErrorCodeMessage } from '../errors.js';
 
+/**
+ * Subscribes to changes in the current signed-in user.
+ *
+ * @param auth - The authentication service instance.
+ * @param nextOrObserver - Callback invoked with the current user or `null`.
+ * @param error - Optional callback invoked when the subscription fails.
+ * @param completed - Optional callback invoked when the subscription completes.
+ * @returns A function that removes the subscription.
+ * @example
+ * ```ts
+ * const unsubscribe = onAuthStateChanged(auth, user => console.log(user?.uid));
+ * ```
+ */
 export function onAuthStateChanged(
   auth: Auth,
   nextOrObserver: ((user: User | null) => void),

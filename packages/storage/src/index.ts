@@ -26,6 +26,7 @@
 // 
 
 import { StorageError } from "./errors.js";
+import { registerStorage } from "./register.js";
 import { list, listAll } from "./list-result.js";
 import { getMetadata } from "./metadata.js";
 import { deleteObject, getBlob, getBytes, getDownloadURL, getStream, ref } from "./reference.js";
@@ -37,6 +38,8 @@ import { StorageReference } from "./internal/reference.js";
 import { ListResult } from "./internal/result.js";
 import { UploadTask, UploadTaskSnapshot } from "./internal/uploadTask.js";
 import type { UploadMetadata, FullMetadata, ListOptions } from "./types.js";
+
+registerStorage();
 
 export {
   getStorage,

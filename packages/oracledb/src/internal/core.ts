@@ -45,6 +45,7 @@ import { SnapshotMetadata } from "../listener/snapshot.js";
 import { QuerySnapshot } from "../collection/snapshot.js";
 import { DocumentData } from "../types/common.js";
 import { BulkUpdate } from "../transaction/bulk.js";
+import { matchesQueryFilters } from "../local/offline_query_matcher.js";
 import {
   DEFAULT_LONG_POLLING_TIMEOUT_SECONDS,
   MAX_REALTIME_MESSAGE_QUEUE_BYTES,
@@ -116,7 +117,7 @@ export class Oracledb {
   #bundleStore: any;
   readonly #realtimeHost: string;
   readonly #realtimeSsl: boolean;
-  private eventManager: EventTarget | undefined;
+  /** @internal */ eventManager: EventTarget | undefined;
   name: string | undefined;
   /** @internal */  __snaps: Record<string, any> = {};
   /** @internal */  __callbacks: Record<string, any> = {};
@@ -147,6 +148,7 @@ export class Oracledb {
       ssl: this.#realtimeSsl,
       merge: false,
       ignoreUndefinedProperties: true,
+      writePromiseResolution: "local",
       experimentalLongPollingOptions: normalizeRuntimeLongPollingOptions(initialLongPollingOptions)
     };
     this.#conn = new DBConn(app);
@@ -156,15 +158,14 @@ export class Oracledb {
     if (this.eventManager.addEventListener != null) {
       this.eventManager.addEventListener("socket established", (e: Event) => {
         e.preventDefault?.();
-        const queuedMessages = [...this.__messageQueue];
-        this.__clearMessageQueue();
+        const queuedMessages = this.__messageQueue.splice(0);
         for (let i = 0; i < queuedMessages.length; i++) {
-          Utils.baasLogger(this.app.logLevel, "sending message from queue", queuedMessages[i]);
           try {
+            Utils.baasLogger(this.app.logLevel, "sending message from queue", queuedMessages[i]);
             this.connection!.send(queuedMessages[i]);
-          } catch {
-            const error = createRealtimeSocketError("Realtime socket send failed.");
-            this.__failRealtimeListeners(error);
+          } catch (error) {
+            this.__messageQueue.unshift(...queuedMessages.slice(i));
+            Utils.baasLogger(this.app.logLevel, "Error sending queued snapshot message", error);
             break;
           }
         }
@@ -221,8 +222,20 @@ export class Oracledb {
       ssl: this.#realtimeSsl,
       merge: obj.merge ?? this._settings.merge,
       ignoreUndefinedProperties: obj.ignoreUndefinedProperties ?? this._settings.ignoreUndefinedProperties,
-      experimentalLongPollingOptions
+      writePromiseResolution: obj.writePromiseResolution ?? this._settings.writePromiseResolution,
+      experimentalLongPollingOptions: obj.experimentalLongPollingOptions ?? this._settings.experimentalLongPollingOptions
     };
+    if (
+      (this._settings.experimentalAutoDetectLongPolling || this._settings.experimentalForceLongPolling) &&
+      this.connection != null
+    ) {
+      try {
+        this.connection.close();
+      } catch {
+        // Ignore close errors from already-closing sockets.
+      }
+      this.connection = null;
+    }
   }
 
   /**
@@ -345,16 +358,13 @@ export class Oracledb {
   };
 
   this.connection.onerror = (error: Event) => {
-    Utils.baasLogger(this.app.logLevel, "Realtime socket error", error);
-    this.__failRealtimeListeners(
-      createRealtimeSocketError("Realtime socket connection failed.")
-    );
-    try {
-      this.connection?.close();
-    } catch {
-      // Ignore close errors after a failed websocket connection.
-    }
-    this.connection = null;
+    error.preventDefault?.();
+    __fireEvent(new Event("socket error"));
+  };
+
+  this.connection.onclose = (event: CloseEvent) => {
+    event.preventDefault?.();
+    __fireEvent(new Event("socket closed"));
   };
 
   const oracleDB = this;
@@ -369,6 +379,11 @@ export class Oracledb {
     } catch (e) {
       return;
     }
+
+    const rawSocketEvent = typeof CustomEvent !== "undefined"
+      ? new CustomEvent("offline socket message", { detail: eventData })
+      : Object.assign(new Event("offline socket message"), { detail: eventData });
+    __fireEvent(rawSocketEvent as Event);
 
     if (
       !Object.prototype.hasOwnProperty.call(eventData, "queryId") ||
@@ -399,6 +414,13 @@ export class Oracledb {
       // ---------- Document Snapshot Handling ----------
       if (resObj.type === "document") {
         Utils.baasLogger(oracleDB.app.logLevel, "document level run");
+        const listenedDocId = String(resObj.path ?? "").split("/").filter(Boolean).pop();
+        if (oid && listenedDocId && oid !== listenedDocId) {
+          return;
+        }
+        if (!oid && rowId && resObj.snap?.__rowId && resObj.snap.__rowId !== rowId) {
+          return;
+        }
 
         let docR: any;
         if (resObj.snap.ref.type === "dualityviewdocument") {
@@ -530,46 +552,72 @@ export class Oracledb {
           new SnapshotMetadata(false, false)
         );
 
-        const docSnaps = oldSnap._docs;
+        if (!oid) {
+          return;
+        }
+
+        const docSnaps = [...oldSnap._docs];
         const indexMap: Record<string, number> = {};
         for (let i = 0; i < docSnaps.length; i++) {
           indexMap[docSnaps[i].id] = i;
         }
 
         const docChange: any[] = [];
+        const operation = opr[opr.length - 1];
+        const oldIndex = indexMap[oid];
+        const existedInOldSnapshot = Object.prototype.hasOwnProperty.call(indexMap, oid);
+        const matchesQuery = operation !== "DELETE" &&
+          matchesQueryFilters(changedData, oldSnap.query?._conditions ?? []);
 
-        for (let i = opr.length - 1; i >= 0; i--) {
-          if (opr[i] === "INSERT") {
-            docSnaps.push(docSnap);
-            docChange.push({
-              doc: docSnap,
-              type: "added",
-              oldIndex: -1,
-              newIndex: docSnaps.length - 1
-            });
-          } else if (opr[i] === "UPDATE") {
-            docSnaps[indexMap[oid]] = docSnap;
-            docChange.push({
-              doc: docSnap,
-              type: "modified",
-              oldIndex: indexMap[oid],
-              newIndex: indexMap[oid]
-            });
-          } else if (opr[i] === "DELETE") {
-            docSnaps.splice(indexMap[oid], 1);
-            docChange.push({
-              doc: docSnap,
-              type: "removed",
-              oldIndex: indexMap[oid],
-              newIndex: -1
-            });
+        if (operation === "DELETE") {
+          if (!existedInOldSnapshot) {
+            return;
           }
-          break;
+          const removedDoc = docSnaps[oldIndex] ?? docSnap;
+          docSnaps.splice(oldIndex, 1);
+          docChange.push({
+            doc: removedDoc,
+            type: "removed",
+            oldIndex,
+            newIndex: -1
+          });
+        } else if (!matchesQuery) {
+          if (!existedInOldSnapshot) {
+            return;
+          }
+          const removedDoc = docSnaps[oldIndex];
+          docSnaps.splice(oldIndex, 1);
+          docChange.push({
+            doc: removedDoc,
+            type: "removed",
+            oldIndex,
+            newIndex: -1
+          });
+        } else if (operation === "INSERT" || !existedInOldSnapshot) {
+          docSnaps.push(docSnap);
+          docChange.push({
+            doc: docSnap,
+            type: "added",
+            oldIndex: -1,
+            newIndex: docSnaps.length - 1
+          });
+        } else if (operation === "UPDATE") {
+          docSnaps[oldIndex] = docSnap;
+          docChange.push({
+            doc: docSnap,
+            type: "modified",
+            oldIndex,
+            newIndex: oldIndex
+          });
+        }
+
+        if (docChange.length === 0) {
+          return;
         }
 
         const querSnap = new QuerySnapshot(
           docSnaps,
-          query,
+          oldSnap.query ?? query,
           new SnapshotMetadata(false, false)
         );
         querSnap._docs = docSnaps;

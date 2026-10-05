@@ -27,6 +27,7 @@
 
 import { App } from "../../app/src/public-types.js";
 import fusabase from "../../app/src/fusabase-internal.js";
+import { _getProvider } from "../../app/src/index.js";
 import { StorageError, storageErrorHandler, StorageErrorCode, getStorageErrorMessage } from "./errors.js";
 import { Storage } from "./internal/storage.js";
 
@@ -35,6 +36,10 @@ import { Storage } from "./internal/storage.js";
  * @param app - The FUSABASE app instance.
  * @param url - The storage URL.
  * @returns A Storage instance.
+ * @example
+ * ```ts
+ * const storage = getStorage(app);
+ * ```
  */
 export function getStorage(app?: App | null, url?: string): Storage {
   app = app == null ? fusabase.app() : app;
@@ -43,5 +48,7 @@ export function getStorage(app?: App | null, url?: string): Storage {
     error.status = 400;
     throw storageErrorHandler(error);
   }
-  return fusabase.storage(app) as any;
+  return _getProvider<Storage>(app, 'storage').getImmediate({
+    identifier: url
+  }) as Storage;
 }

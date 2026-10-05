@@ -1,6 +1,6 @@
 # OracleDB Module
 
-Use `fusabase/oracledb` for document-style data access, queries, writes, transactions, aggregates, and snapshot listeners.
+Use `fusabase/oracledb` for document-style data access, queries, writes, transactions, aggregates, snapshot listeners, and browser offline persistence.
 
 ## Primary Imports
 
@@ -188,4 +188,5 @@ const unsubscribe = onSnapshot(collection(db, "recipes"), (snapshot) => {
 
 ## Related Docs
 
+- `agent_docs/offline.md` for local cache and queued-write APIs.
 - `agent_docs/storage.md`

@@ -29,14 +29,34 @@ import { FusabaseError } from "./errors.js";
 import { App, FusabaseOptions } from "./public-types.js"; // your options interface
 import {LogLevel} from "../../logger/LogLevel.js";
 import { getOrCreateBrowserInstanceId } from './instance-id.js';
-import {
-  DEFAULT_LONG_POLLING_TIMEOUT_SECONDS,
-  validateLongPollingTimeoutSeconds
-} from "../../oracledb/src/internal/settings.js";
+import { Component } from './component.js';
 
 // Error type with HTTP-like status
 interface ErrorWithStatus extends Error {
   status?: number;
+}
+
+export const _components = new Map<string, Component<any>>();
+
+export function _registerComponent<T>(component: Component<T>): boolean {
+  if (_components.has(component.name)) {
+    return false;
+  }
+  _components.set(component.name, component);
+  for (const app of Object.values(fusabase._apps)) {
+    if (app instanceof App) {
+      app.container.addComponent(component);
+    }
+  }
+  return true;
+}
+
+export function _getProvider<T>(app: App, name: string) {
+  return app.container.getProvider<T>(name);
+}
+
+export function _removeServiceInstance(app: App, name: string, instanceIdentifier = '[DEFAULT]'): void {
+  app.container.getProvider(name).clearInstance(instanceIdentifier);
 }
 
 // typeStrings for argCheck
@@ -175,16 +195,31 @@ function argCheck<T>(
   return value;
 }
 
-function getConfiguredLongPollingInterval(options: Record<string, any>): number {
-  if (!Object.prototype.hasOwnProperty.call(options, "long_polling_interval")) {
-    return DEFAULT_LONG_POLLING_TIMEOUT_SECONDS;
-  }
+function pickConfigValue(config: Record<string, any>, snakeKey: string, camelKey: string): any {
+  return Object.prototype.hasOwnProperty.call(config, snakeKey)
+    ? config[snakeKey]
+    : config[camelKey];
+}
 
-  try {
-    return validateLongPollingTimeoutSeconds(options["long_polling_interval"]);
-  } catch (err) {
-    throw appErrorHandler(err as ErrorWithStatus);
-  }
+function normalizeAppConfig(config: Record<string, any>): Record<string, any> {
+  return {
+    ordsHost: pickConfigValue(config, 'ords_host', 'ordsHost'),
+    schema: config.schema,
+    appType: pickConfigValue(config, 'app_type', 'appType'),
+    appID: pickConfigValue(config, 'app_id', 'appID'),
+    projectID: pickConfigValue(config, 'project_id', 'projectID'),
+    objsType: pickConfigValue(config, 'objs_type', 'objsType'),
+    storageBucket: pickConfigValue(config, 'storage_bucket', 'storageBucket'),
+    authType: pickConfigValue(config, 'auth_type', 'authType'),
+    authID: pickConfigValue(config, 'auth_id', 'authID'),
+    idcsDomainURL: pickConfigValue(config, 'idcs_domain_url', 'idcsDomainURL'),
+    useSocket: pickConfigValue(config, 'use_socket', 'useSocket'),
+    longPollingInterval: pickConfigValue(config, 'long_polling_interval', 'longPollingInterval'),
+    version: config.version,
+    appTrustToken: config.appTrustToken,
+    chunkSize: pickConfigValue(config, 'upload_chunk_size', 'chunkSize'),
+    maxUploadBytes: pickConfigValue(config, 'max_upload_bytes', 'maxUploadBytes'),
+  };
 }
 
 // -------------------- SOBa Core Object --------------------
@@ -202,52 +237,56 @@ const fusabase = {
 
 
   initializeApp(options_sdk: Record<string, any>, name: string = "[DEFAULT]"): App {
-    argCheck(options_sdk["ords_host"], getErrorMessage('invalidOrdsHost'), true, [typeStrings.STRING]);
-    argCheck(options_sdk["schema"], getErrorMessage('invalidSchema'), true, [typeStrings.STRING]);
-    argCheck(options_sdk["app_id"], getErrorMessage('invalidAppId'), true, [typeStrings.STRING]);
-    argCheck(options_sdk["project_id"], getErrorMessage('invalidProjectId'), true, [typeStrings.STRING]);
-    argCheck(options_sdk["objs_type"], getErrorMessage('invalidObjsType'), true, [typeStrings.STRING]);
-    argCheck(options_sdk["storage_bucket"], getErrorMessage('invalidStorageBucket'), true, [typeStrings.STRING]);
-    argCheck(options_sdk["auth_type"], getErrorMessage('invalidAuthType'), true, [typeStrings.STRING]);
-    argCheck(options_sdk["app_type"], "Invalid app type", true, [typeStrings.STRING]);
+    const config = normalizeAppConfig(options_sdk);
+    argCheck(config.ordsHost, getErrorMessage('invalidOrdsHost'), true, [typeStrings.STRING]);
+    argCheck(config.schema, getErrorMessage('invalidSchema'), true, [typeStrings.STRING]);
+    argCheck(config.appID, getErrorMessage('invalidAppId'), true, [typeStrings.STRING]);
+    argCheck(config.projectID, getErrorMessage('invalidProjectId'), true, [typeStrings.STRING]);
+    argCheck(config.objsType, getErrorMessage('invalidObjsType'), true, [typeStrings.STRING]);
+    argCheck(config.storageBucket, getErrorMessage('invalidStorageBucket'), true, [typeStrings.STRING]);
+    argCheck(config.authType, getErrorMessage('invalidAuthType'), true, [typeStrings.STRING]);
+    argCheck(config.appType, "Invalid app type", true, [typeStrings.STRING]);
 
-    argCheck(options_sdk["auth_id"], getErrorMessage('invalidAuthId'), true, [typeStrings.STRING]);
-    if (String(options_sdk["auth_type"]).toLowerCase() === "idcs") {
-      argCheck(options_sdk["idcs_domain_url"], "Invalid IDCS domain URL", true, [typeStrings.STRING]);
+    argCheck(config.authID, getErrorMessage('invalidAuthId'), true, [typeStrings.STRING]);
+    if (String(config.authType).toLowerCase() === "idcs") {
+      argCheck(config.idcsDomainURL, "Invalid IDCS domain URL", true, [typeStrings.STRING]);
     }
 
-    argCheck(options_sdk["use_socket"], getErrorMessage('invalidSocketValue'), false, [typeStrings.BOOL]);
-    argCheck(options_sdk["long_polling_interval"], getErrorMessage('invalidPollingInterval'), false, [typeStrings.INT]);
-    argCheck(options_sdk["version"], getErrorMessage('invalidOracledbVersion'), false, [typeStrings.INT]);
-    argCheck(options_sdk["upload_chunk_size"], getErrorMessage('invalidChunkSize'), false, [typeStrings.INT]);
-    argCheck(options_sdk["max_upload_bytes"], getErrorMessage('invalidMaxUploadBytes'), false, [typeStrings.INT]);
-
-    const longPollingInterval = getConfiguredLongPollingInterval(options_sdk);
+    argCheck(config.useSocket, getErrorMessage('invalidSocketValue'), false, [typeStrings.BOOL]);
+    argCheck(config.longPollingInterval, getErrorMessage('invalidPollingInterval'), false, [typeStrings.INT]);
+    argCheck(config.version, getErrorMessage('invalidOracledbVersion'), false, [typeStrings.INT]);
+    argCheck(config.chunkSize, getErrorMessage('invalidChunkSize'), false, [typeStrings.INT]);
+    argCheck(config.maxUploadBytes, getErrorMessage('invalidMaxUploadBytes'), false, [typeStrings.INT]);
 
     const options: FusabaseOptions = {
-      ordsHost: options_sdk["ords_host"],
-      schema: options_sdk["schema"],
-      appType: String(options_sdk["app_type"]).toLowerCase(),
-      appID: options_sdk["app_id"],
-      projectID: options_sdk["project_id"],
-      objsType: options_sdk["objs_type"].toLowerCase(),
-      storageBucket: options_sdk["storage_bucket"],
-      authType: options_sdk["auth_type"].toLowerCase(),
-      authID: options_sdk["auth_id"],
-      idcsDomainURL: options_sdk["idcs_domain_url"],
-      useSocket: options_sdk["use_socket"] === true ? options_sdk["use_socket"] : false,
-      longPollingInterval,
-      version: options_sdk["version"] ? options_sdk["version"] : 2,
-      appTrustToken: options_sdk["appTrustToken"] ? options_sdk["appTrustToken"] : null,
-      chunkSize: options_sdk["upload_chunk_size"] ? options_sdk["upload_chunk_size"] : 16 * 1024 * 1024,
-      maxUploadBytes: options_sdk["max_upload_bytes"],
+      ordsHost: config.ordsHost,
+      schema: config.schema,
+      appType: String(config.appType).toLowerCase(),
+      appID: config.appID,
+      projectID: config.projectID,
+      objsType: String(config.objsType).toLowerCase(),
+      storageBucket: config.storageBucket,
+      authType: String(config.authType).toLowerCase(),
+      authID: config.authID,
+      idcsDomainURL: config.idcsDomainURL,
+      useSocket: config.useSocket === true,
+      longPollingInterval: config.longPollingInterval
+        ? config.longPollingInterval
+        : 29,
+      version: config.version ? config.version : 2,
+      appTrustToken: config.appTrustToken ? config.appTrustToken : null,
+      chunkSize: config.chunkSize ? config.chunkSize : 16 * 1024 * 1024,
+      maxUploadBytes: config.maxUploadBytes,
     };
 
-    if (typeof options_sdk["appTrustToken"] === 'string' && options_sdk["appTrustToken"]) {
-      (options as any).appTrustToken = options_sdk["appTrustToken"];
+    if (typeof config.appTrustToken === 'string' && config.appTrustToken) {
+      (options as any).appTrustToken = config.appTrustToken;
     }
 
     const appInstance = new App(options, name);
+    for (const component of _components.values()) {
+      appInstance.container.addComponent(component);
+    }
 
     try {
       (appInstance as any)._instanceId = getOrCreateBrowserInstanceId();

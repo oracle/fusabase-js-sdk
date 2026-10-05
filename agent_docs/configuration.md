@@ -1,6 +1,6 @@
 # Configuration
 
-Use the Oracle Backend for Firebase console-generated application config when calling `initializeApp(...)`. The public config object uses **snake_case** keys — they are passed through verbatim from the JSON the console emits.
+Use the Oracle Backend with Firebase APIs console-generated application config when calling `initializeApp(...)`. The public config object uses **snake_case** keys — they are passed through verbatim from the JSON the console emits.
 
 ## Canonical Shape
 
@@ -19,7 +19,7 @@ Required keys (emitted by the console):
 
 Optional keys read by the SDK:
 
-- `idcs_config`
+- `idcs_domain_url` (for `auth_type: "idcs"`)
 - `use_socket`
 - `long_polling_interval`
 - `upload_chunk_size`
@@ -53,7 +53,7 @@ const app = initializeApp(fusabaseConfig);
 
 - Treat the console-provided JSON as the source of truth — pass it to `initializeApp` unchanged.
 - Internally the SDK converts these into a camelCase `FusabaseOptions` object on `app.options` (e.g. `app.options.ordsHost`). Application code that **reads** options sees the camelCase form; code that **passes** config in must use snake_case.
-- `idcs_config` is available for IDCS-specific settings.
+- Pass `idcs_domain_url` from the console config when using IDCS authentication.
 - Named apps are supported through the optional second parameter to `initializeApp(config, name)`.
 
 ## Related Docs

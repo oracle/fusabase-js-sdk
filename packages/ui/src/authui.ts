@@ -56,6 +56,15 @@ interface AuthUIConfig {
   signInSuccessUrl?: string;
 }
 
+/**
+ * Provides a browser sign-in user interface.
+ *
+ * @example
+ * ```ts
+ * const ui = new authUI.AuthUI(app);
+ * ui.start('#auth-root', { signInOptions: ['google'] });
+ * ```
+ */
 export const authUI: any = {
   AuthUI: class {
     private app?: App;

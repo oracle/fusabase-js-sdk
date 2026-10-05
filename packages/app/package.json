@@ -1,0 +1,16 @@
+{
+  "name": "@fusabase/app",
+  "version": "26.3.0",
+  "type": "module",
+  "description": "Oracle® Backend with Firebase APIs App package",
+  "main": "./src/index.js",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "dependencies": {
+    "tslib": "^2.8.1"
+  }
+}

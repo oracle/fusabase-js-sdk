@@ -33,6 +33,15 @@ import { FieldPath } from "../field/path.js";
 import { Oracledb } from "../internal/core.js";
 /**
  * Returns a DocumentReference from a CollectionReference and path (and optional path segments).
+ *
+ * @param reference - A database, collection, or document reference.
+ * @param path - A document path or identifier; generated when omitted.
+ * @param pathSegments - Additional path segments.
+ * @returns A document reference.
+ * @example
+ * ```ts
+ * const profile = doc(db, 'profiles', 'ada');
+ * ```
  */
 export function doc<
   AppModelType,
@@ -76,6 +85,12 @@ export function doc<
 
 /**
  * Returns a FieldPath that refers to the ID of a document.
+ *
+ * @returns A field path for a document identifier.
+ * @example
+ * ```ts
+ * const selected = query(users, where(documentId(), '==', 'ada'));
+ * ```
  */
 export function documentId(): FieldPath {
   return FieldPath.documentId();
@@ -87,6 +102,10 @@ export function documentId(): FieldPath {
  * @param left - The first reference to compare.
  * @param right - The second reference to compare.
  * @returns true if the references are equal.
+ * @example
+ * ```ts
+ * const same = refEqual(firstRef, secondRef);
+ * ```
  */
 export function refEqual<
   AppModelType,

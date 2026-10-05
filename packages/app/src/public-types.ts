@@ -25,11 +25,8 @@
 //-----------------------------------------------------------------------------
 // 
 
-import { Auth } from "../../auth/src/types/auth.js";
-import { Oracledb } from "../../oracledb/src/internal/core.js";
-import { Storage } from "../../storage/src/internal/storage.js";
 import {LogLevel} from "../../logger/LogLevel.js";
-import { browserLocalPersistence, browserSessionPersistence, inMemoryPersistence, Persistence } from "../../auth/src/types/persistence.js";
+import { Component, ComponentContainer } from "./component.js";
 
 interface AppConfig {
   objsType?: string;
@@ -86,48 +83,124 @@ export class App {
 
   /**
    * The settable config flag for GDPR opt-in/opt-out
+   *
+   * @example
+   * ```ts
+   * app.automaticDataCollectionEnabled = true;
+   * ```
    */
   automaticDataCollectionEnabled: boolean;
 
-  private authInstance: Auth | null = null;
-  private oracledbInstance: Oracledb | null = null;
-  private storageInstance: Storage | null = null;
   private logLevelValue: LogLevel = LogLevel.SILENT;
   private configValue: AppConfig | null = null;
+  private readonly componentContainer: ComponentContainer;
 
+  /**
+   * Gets service configuration derived from the application options.
+   *
+   * @returns The service configuration, or `null` before configuration is applied.
+   * @example
+   * ```ts
+   * console.log(app.config?.storageBucket);
+   * ```
+   */
   get config(): AppConfig | null {
     return this.configValue;
   }
 
+  /**
+   * Creates an application instance. Prefer {@link initializeApp} for public use.
+   *
+   * @param options - The application configuration.
+   * @param name - The instance name.
+   * @example
+   * ```ts
+   * const app = initializeApp(options);
+   * ```
+   */
   constructor(options: FusabaseOptions, name: string) {
     this.options = options;
     this.name = name;
     this.automaticDataCollectionEnabled = false;
+    this.componentContainer = new ComponentContainer(name);
+    this.componentContainer.addComponent(
+      new Component('app', () => this, 'PUBLIC')
+    );
   }
 
-  auth(persArr?: Persistence[]): Auth | null {
-    if (persArr) {
-      this.authInstance = new Auth(this, {persistence:persArr});
-      return this.authInstance;
-    }
-    return this.authInstance;
+  /**
+   * Gets the component container associated with this application.
+   *
+   * @returns The component container.
+   */
+  get container(): ComponentContainer {
+    return this.componentContainer;
   }
 
-  oracledb(): Oracledb | null {
-    return this.oracledbInstance;
+  /**
+   * Gets the authentication service associated with this application.
+   *
+   * @returns The authentication service instance.
+   * @example
+   * ```ts
+   * const auth = app.auth();
+   * ```
+   */
+  auth(): any {
+    return this.componentContainer.getProvider('auth').getImmediate();
   }
 
-  storage(url: string = ""): Storage | null {
-    return this.storageInstance;
+  /**
+   * Gets a database service associated with this application.
+   *
+   * @param databaseId - Optional identifier for a named database.
+   * @returns The database service instance.
+   * @example
+   * ```ts
+   * const db = app.oracledb();
+   * ```
+   */
+  oracledb(databaseId?: string): any {
+    return this.componentContainer.getProvider('oracledb').getImmediate({
+      identifier: databaseId
+    });
   }
 
+  /**
+   * Gets a storage service associated with this application.
+   *
+   * @param url - Optional storage endpoint identifier.
+   * @returns The storage service instance.
+   * @example
+   * ```ts
+   * const storage = app.storage();
+   * ```
+   */
+  storage(url: string = ""): any {
+    return this.componentContainer.getProvider('storage').getImmediate({
+      identifier: url
+    });
+  }
+
+  /**
+   * Clears service instances registered with this application.
+   *
+   * @returns A promise that resolves once registered instances are cleared.
+   * @example
+   * ```ts
+   * await app.delete();
+   * ```
+   */
   async delete(): Promise<void> {
-    this.authInstance = null;
-    this.oracledbInstance = null;
-    this.storageInstance = null;
+    this.componentContainer.clearInstances();
     // fusabase._apps[this.name] = null;
   }
 
+  /**
+   * Gets the application's diagnostic log level.
+   *
+   * @returns The current log level.
+   */
   get logLevel(): LogLevel {
     return this.logLevelValue;
   }
@@ -148,10 +221,6 @@ export class App {
     };
 
     this.configValue = config;
-    this.authInstance = new Auth(this, {
-      persistence:[browserLocalPersistence,browserSessionPersistence, inMemoryPersistence]});
-    this.oracledbInstance = new Oracledb(this);
-    this.storageInstance = new Storage(this);
   }
 }
 
@@ -251,6 +320,7 @@ export interface FusabaseOptions {
    * (example value: `AIzaSyDOCAbC123dEf456GhI789jKl012-MnO`).
    */
   ordsHost?: string;
+  ords_host?: string;
   /**
    * Auth domain for the project ID.
    */
@@ -260,51 +330,63 @@ export interface FusabaseOptions {
    * Platform / app type identifier from config (e.g. config `app_type`).
    */
   appType?: string;
+  app_type?: string;
   /**
    * Application id.
    */
   appID?: string;
+  app_id?: string;
   /**
    * The unique identifier for the project across all of Fusabase.
    */
   projectID?: string;
+  project_id?: string;
   /**
    * The default Cloud Storage bucket name.
    */
   objsType?: string;
+  objs_type?: string;
   /**
    * Unique numerical value used to identify each sender that can send
    * Fusabase Cloud Messaging messages to client apps.
    */
   storageBucket?: string;
+  storage_bucket?: string;
   /**
    * Unique identifier for the app.
    */
   authType?: string;
+  auth_type?: string;
   /**
    * An ID automatically created when you enable Analytics in your
    * Fusabase project and register a web app. In versions 7.20.0
    * and higher, this parameter is optional.
    */
   authID?: string;
+  auth_id?: string;
 
   /**
    * IDCS identity domain URL used for IDCS session logout.
    */
   idcsDomainURL?: string;
+  idcs_domain_url?: string;
 
   useSocket?: boolean;
+  use_socket?: boolean;
 
   longPollingInterval?: number;
+  long_polling_interval?: number;
 
   version?: number;
 
   chunkSize?: number;
+  upload_chunk_size?: number;
 
   /**
    * Maximum number of bytes accepted by Storage upload helpers.
    */
   maxUploadBytes?: number;
+  max_upload_bytes?: number;
 
   /** @internal */
   appTrustToken?: string;

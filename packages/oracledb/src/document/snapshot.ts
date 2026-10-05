@@ -60,6 +60,8 @@ export class DocumentSnapshot<
     this._converted_data = null;
     this._otherMetadata = {};
     this._otherMetadata["LAST_MODIFIED"] = data ? data["LAST_MODIFIED"] : null;
+    this._otherMetadata["updateTime"] = data ? (data["updateTime"] ?? data["LAST_MODIFIED"] ?? null) : null;
+    this._otherMetadata["commitTime"] = data ? (data["commitTime"] ?? data["COMMIT_TIME"] ?? null) : null;
     this._otherMetadata["CREATED"] = data ? data["CREATED"] : null;
     this._otherMetadata["SUBCOLLECTION"] = data ? data["SUBCOLLECTION"] : null;
     this._otherMetadata["PARENT_OID"] = data ? data["PARENT_OID"] : null;
@@ -140,6 +142,8 @@ export class DocumentSnapshot<
       "ROWID": (obj as any).__rowId,
       "CREATED": (obj as any)._otherMetadata["CREATED"],
       "LAST_MODIFIED": (obj as any)._otherMetadata["LAST_MODIFIED"],
+      "updateTime": (obj as any)._otherMetadata["updateTime"],
+      "commitTime": (obj as any)._otherMetadata["commitTime"],
       "SUBCOLLECTION": (obj as any)._otherMetadata["SUBCOLLECTION"],
       "ASOF": (obj as any)._otherMetadata["ASOF"],
       "PARENT_OID": (obj as any)._otherMetadata["PARENT_OID"],
@@ -194,6 +198,8 @@ export class QueryDocumentSnapshot<
         "ROWID": (obj as any).__rowId,
         "CREATED": (obj as any)._otherMetadata["CREATED"],
         "LAST_MODIFIED": (obj as any)._otherMetadata["LAST_MODIFIED"],
+        "updateTime": (obj as any)._otherMetadata["updateTime"],
+        "commitTime": (obj as any)._otherMetadata["commitTime"],
         "SUBCOLLECTION": (obj as any)._otherMetadata["SUBCOLLECTION"],
         "ASOF": (obj as any)._otherMetadata["ASOF"],
         "PARENT_OID": (obj as any)._otherMetadata["PARENT_OID"]

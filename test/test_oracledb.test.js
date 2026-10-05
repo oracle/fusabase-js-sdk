@@ -27,6 +27,7 @@
 
 // test/fusabase.test.js
 import * as assert from 'node:assert';
+import { options } from './config.js';
 import {App, initializeApp, setLogLevel} from "fusabase/app";
 import { 
   getOracledb, 
@@ -71,8 +72,6 @@ import { expect } from 'chai';
 describe('fusabase Integration Tests for version 1', function () {
   this.timeout(30000);
 
-  const options = {}
-
   let app, db, cityRef, cityRef1, subColPlacesRef, fd1, docRef, docRef1, res9, subDocColPlacesRef;
   const collectionName = "Users";
   let testDocId;
@@ -105,7 +104,7 @@ describe('fusabase Integration Tests for version 1', function () {
   
 
   it('should initialize the app', () => {
-    app = initializeApp({...options,appTrustToken:"APP_TRUST_TOKEN"}, "test");
+    app = initializeApp(options, "test");
     expect(app.options.ordsHost, options.ords_host);
     expect(app.options.schema, options.schema);
     expect(app.options.appID, options.app_id);
@@ -937,8 +936,6 @@ describe('fusabase Integration Tests for version 1', function () {
 describe('fusabase Integration Tests for version 2', function () {
   this.timeout(30000);
 
-  const options = {}
-
   let app, db, cityRef, cityRef1, subColPlacesRef, fd1, docRef, docRef1, res9, subDocColPlacesRef;
   const collectionName = "Users";
   let testDocId;
@@ -971,7 +968,7 @@ describe('fusabase Integration Tests for version 2', function () {
   
 
   it('should initialize the app', () => {
-    app = initializeApp({...options,appTrustToken:"APP_TRUST_TOKEN"}, "test");
+    app = initializeApp(options, "test");
     expect(app.options.ordsHost, options.ords_host);
     expect(app.options.schema, options.schema);
     expect(app.options.appID, options.app_id);

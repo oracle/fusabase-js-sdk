@@ -41,6 +41,14 @@ import { argCheck, typeStrings, validateVectorSearchQuery } from '../util/utils.
 
 /**
  * Builds a query from a base query and a sequence of constraints, and/or a composite filter.
+ *
+ * @param quer - The collection or query to constrain.
+ * @param args - Query constraints applied in order.
+ * @returns A new query with the supplied constraints.
+ * @example
+ * ```ts
+ * const adults = query(users, where('age', '>=', 18), orderBy('name'));
+ * ```
  */
 export function query<
   AppModelType ,
@@ -133,6 +141,14 @@ export function query<
  * optionally in descending order instead of ascending.
  *
  * Documents that do not contain the specified field will not be present in the query result.
+ *
+ * @param fieldPath - The field used for ordering.
+ * @param directionStr - The order direction, ascending by default.
+ * @returns An ordering constraint.
+ * @example
+ * ```ts
+ * const recent = query(posts, orderBy('createdAt', 'desc'));
+ * ```
  */
 export function orderBy(
   fieldPath: string | FieldPath,
@@ -147,6 +163,15 @@ export function orderBy(
 /**
  * Creates a QueryFieldFilterConstraint that enforces that documents must contain
  * the specified field and that the value should satisfy the relation constraint provided.
+ *
+ * @param fieldPath - The field to test.
+ * @param opStr - The comparison operator.
+ * @param value - The value to compare against.
+ * @returns A filter constraint.
+ * @example
+ * ```ts
+ * const active = query(users, where('active', '==', true));
+ * ```
  */
 export function where(
   fieldPath: string | FieldPath,
@@ -171,6 +196,9 @@ export function where(
  * @example
  *   // Get the first 5 users ordered by age
  *   const q = query(usersRef, orderBy("age"), limit(5));
+ *
+ * @param limit - The maximum number of results.
+ * @returns A limit constraint.
  */
 export function limit(limit: number): QueryLimitConstraint {
   return new QueryLimitConstraint('limit', limit);
@@ -186,6 +214,9 @@ export function limit(limit: number): QueryLimitConstraint {
  * @example
  *   // Get the last 5 users ordered by signup date
  *   const q = query(usersRef, orderBy("signupDate"), limitToLast(5));
+ *
+ * @param limit - The maximum number of results from the end of the ordered set.
+ * @returns A limit constraint.
  */
 export function limitToLast(limit: number): QueryLimitConstraint {
   return new QueryLimitConstraint('limitToLast', limit);
@@ -193,6 +224,13 @@ export function limitToLast(limit: number): QueryLimitConstraint {
 
 /**
  * Creates an 'endAt' query constraint.
+ *
+ * @param fieldValues - Values that define the inclusive end cursor.
+ * @returns An end-cursor constraint.
+ * @example
+ * ```ts
+ * const firstPage = query(users, orderBy('name'), endAt('M'));
+ * ```
  */
 export function endAt(...fieldValues: unknown[]): QueryEndAtConstraint {
   const cons: unknown[] = [...fieldValues];
@@ -201,6 +239,13 @@ export function endAt(...fieldValues: unknown[]): QueryEndAtConstraint {
 
 /**
  * Creates an 'endBefore' query constraint.
+ *
+ * @param fieldValues - Values that define the exclusive end cursor.
+ * @returns An end-cursor constraint.
+ * @example
+ * ```ts
+ * const firstPage = query(users, orderBy('name'), endBefore('M'));
+ * ```
  */
 export function endBefore(...fieldValues: unknown[]): QueryEndAtConstraint {
   const cons: unknown[] = [...fieldValues];
@@ -209,6 +254,13 @@ export function endBefore(...fieldValues: unknown[]): QueryEndAtConstraint {
 
 /**
  * Creates a 'startAt' query constraint.
+ *
+ * @param fieldValues - Values that define the inclusive start cursor.
+ * @returns A start-cursor constraint.
+ * @example
+ * ```ts
+ * const later = query(users, orderBy('name'), startAt('M'));
+ * ```
  */
 export function startAt(...fieldValues: unknown[]): QueryStartAtConstraint {
   const cons: unknown[] = [...fieldValues];
@@ -217,6 +269,13 @@ export function startAt(...fieldValues: unknown[]): QueryStartAtConstraint {
 
 /**
  * Creates a 'startAfter' query constraint.
+ *
+ * @param fieldValues - Values that define the exclusive start cursor.
+ * @returns A start-cursor constraint.
+ * @example
+ * ```ts
+ * const later = query(users, orderBy('name'), startAfter('M'));
+ * ```
  */
 export function startAfter(...fieldValues: unknown[]): QueryStartAtConstraint {
   const cons: unknown[] = [...fieldValues];
@@ -229,6 +288,10 @@ export function startAfter(...fieldValues: unknown[]): QueryStartAtConstraint {
  * @param left - First query
  * @param right - Second query
  * @returns true if the queries are logically equal
+ * @example
+ * ```ts
+ * const same = queryEqual(firstQuery, secondQuery);
+ * ```
  */
 export function queryEqual<AppModelType, DbModelType extends DocumentData>(
   left: Query<AppModelType, DbModelType>,
@@ -241,6 +304,10 @@ export function queryEqual<AppModelType, DbModelType extends DocumentData>(
  * Creates a join constraint for use in a query.
  * @param viewName - The name of the view to join with.
  * @returns A QueryFieldJoinsConstraint instance representing the join.
+ * @example
+ * ```ts
+ * const withProfile = query(users, join('USER_PROFILE'));
+ * ```
  */
 export function join(viewName: string): QueryFieldJoinsConstraint {
   return new QueryFieldJoinsConstraint({
@@ -268,6 +335,11 @@ export function join(viewName: string): QueryFieldJoinsConstraint {
  *   )
  * );
  * const sparseSnap = await getDocs(qSparse);
+ *
+ * @param field - The vector field to search.
+ * @param query - The dense or sparse query vector.
+ * @param options - Optional metric, result limit, and similarity threshold.
+ * @returns A vector-search constraint.
  */
 export function findNearest(
   field: string,

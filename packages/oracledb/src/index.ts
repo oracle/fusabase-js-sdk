@@ -26,6 +26,7 @@
 // 
 
 import { LogLevel } from "../../logger/LogLevel.js";
+import { registerOracledb } from "./register.js";
 import { AggregateField, AggregateQuery, AggregateQuerySnapshot } from "./collection/aggregate.js";
 import { QueryCompositeFilterConstraint, QueryConstraint, QueryEndAtConstraint, QueryFieldFilterConstraint, QueryFieldJoinsConstraint, QueryLimitConstraint, QueryOrderByConstraint, QueryStartAtConstraint } from "./collection/constraint.js";
 import { Query } from "./collection/reference.js";
@@ -43,6 +44,7 @@ import { getOracledb, initializeOracledb } from "./public/core.js";
 import { doc, documentId, refEqual } from "./public/document.js";
 import { arrayRemove, arrayUnion, deleteField, increment, serverTimestamp } from "./public/fieldvalue.js";
 import { getAggregateFromServer, getCountFromServer, getDoc, getDocFromServer, getDocs, getDocsFromServer } from "./public/get.js";
+import { clearIndexedDbPersistence, disableNetwork, enableIndexedDbPersistence, enableMemoryPersistence, enableNetwork, enableOffline, getDocFromCache, getDocsFromCache, persistentLocalCache, waitForPendingWrites } from "./public/offline.js";
 import { endAt, endBefore, join, limit, limitToLast, orderBy, query, queryEqual, startAfter, startAt, where } from "./public/query.js";
 import { findNearest } from "./public/query.js";
 import { deleteVector, denseVector, sparseVector } from "./public/vector.js";
@@ -54,6 +56,8 @@ import { Transaction, WriteBatch } from "./transaction/batch.js";
 import { OracledbError, OracledbErrorCode } from "./util/utils.js";
 import { setLogLevel } from "./util/utils_helper.js";
 
+registerOracledb();
+
 
 export {getDoc, onSnapshot, getDocFromServer, getDocsFromServer, getDocs, doc, getOracledb,
 initializeOracledb, collection, dualityViewCollection, dualityViewDoc,
@@ -63,7 +67,10 @@ startAt, startAfter, query, getCountFromServer, count, sum, average,
 getAggregateFromServer, aggregateFieldEqual, aggregateQuerySnapshotEqual, 
 queryEqual, snapshotEqual, collectionGroup, refEqual, documentId, setLogLevel,
 serverTimestamp, deleteField, arrayRemove, arrayUnion, increment, updateDocs,
-denseVector, sparseVector, deleteVector, findNearest}
+denseVector, sparseVector, deleteVector, findNearest,
+enableOffline, enableIndexedDbPersistence, enableMemoryPersistence,
+clearIndexedDbPersistence, enableNetwork, disableNetwork,
+getDocFromCache, getDocsFromCache, persistentLocalCache, waitForPendingWrites}
 
 export {Timestamp};
 export {QueryFieldJoinsConstraint};
@@ -94,3 +101,12 @@ export {SnapshotMetadata};
 export {QueryDocumentSnapshot};
 export {OracledbErrorCode};
 export {LogLevel};
+export type { OfflineOptions, PersistenceKind } from "./local/index.js";
+export type { PersistentLocalCacheOptions } from "./public/offline.js";
+export {
+  OracledbDocumentKey,
+  OracledbDocumentVersion,
+  OracledbWritePrecondition,
+  OracledbSnapshotVersion,
+} from "./model/index.js";
+export type { ReadSource, ListenOptions } from "./core/index.js";

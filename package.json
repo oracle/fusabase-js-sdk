@@ -1,8 +1,8 @@
 {
   "name": "fusabase",
-  "version": "26.2.0",
+  "version": "26.3.0",
   "type": "module",
-  "description": "FUSABASE Reference JS SDK",
+  "description": "Oracle® Backend with Firebase APIs JavaScript Modular SDK Reference",
   "exports": {
     "./auth": {
       "types": "./dist/auth/src/index.d.ts",

@@ -90,7 +90,11 @@ export function oracledbErrorHandler(err: any): OracledbError {
   else if (err.status === 500) code = OracledbErrorCode.INTERNAL_ERROR;
   else if (err.status === 408) code = OracledbErrorCode.NETWORK_ISSUE;
   else code = OracledbErrorCode.UNKNOWN;
-  return new OracledbError(code, err.message, err.stack);
+  const handled = new OracledbError(code, err.message, err.stack);
+  if (err.status != null) {
+    handled.status = err.status;
+  }
+  return handled;
 }
 
 /** Oracledb supported API versions */
@@ -199,9 +203,12 @@ export function getHostString(
  * Gets an auth token from the current user.
  */
 export function getToken(app: any): any {
-  
-  // Typing of .auth and .currentUser may be improved to match your SDK better.
-  const user = app.auth().currentUser;
+  let user: any = null;
+  try {
+    user = app.auth()?.currentUser;
+  } catch {
+    user = null;
+  }
   if (!user) {
     return null;
   }
@@ -253,7 +260,12 @@ export function convertToDateObject(dateStr: string): Date {
  * Returns the currentUser's access token (asynchronous).
  */
 export async function getAccessToken(app: any): Promise<string | null> {
-  const user = app.auth().currentUser;
+  let user: any = null;
+  try {
+    user = app.auth()?.currentUser;
+  } catch {
+    user = null;
+  }
   return user && user.getFUSABASEToken ? await user.getFUSABASEToken() : null;
 }
 

@@ -30,7 +30,17 @@ import { App } from "./public-types.js";
 import {LogLevel} from "../../logger/LogLevel.js";
 import { FusabaseOptions } from "./public-types.js"; // your existing options interface
 
-// initialize app
+/**
+ * Initializes and registers an application instance.
+ *
+ * @param options - The application configuration.
+ * @param name - An optional instance name; defaults to the primary instance.
+ * @returns The initialized application instance.
+ * @example
+ * ```ts
+ * const app = initializeApp({ projectId: 'my-project', appId: 'my-app' });
+ * ```
+ */
 export function initializeApp(options: FusabaseOptions | null, name?: string): App {
   if (options == null) {
     const err = new Error("Incorrect config provided!") as Error & { status?: number };
@@ -48,7 +58,16 @@ export function initializeApp(options: FusabaseOptions | null, name?: string): A
   return fusabase.initializeApp(options, name);
 }
 
-// get app instance
+/**
+ * Returns a previously initialized application instance.
+ *
+ * @param name - The optional instance name; defaults to the primary instance.
+ * @returns The matching application instance.
+ * @example
+ * ```ts
+ * const app = getApp();
+ * ```
+ */
 export function getApp(name?: string): App {
   if (name == null) {
     name = "[DEFAULT]";
@@ -56,7 +75,15 @@ export function getApp(name?: string): App {
   return fusabase.app(name);
 }
 
-// get all apps
+/**
+ * Returns all initialized application instances.
+ *
+ * @returns An array of application instances.
+ * @example
+ * ```ts
+ * console.log(getApps().map(app => app.name));
+ * ```
+ */
 export function getApps(): App[] {
   const apps: App[] = [];
   Object.entries(fusabase._apps).forEach(([_, value]) => {
@@ -67,7 +94,16 @@ export function getApps(): App[] {
   return apps;
 }
 
-// make app unusable
+/**
+ * Deletes an application instance and releases its registered services.
+ *
+ * @param app - The application instance to delete.
+ * @returns A promise resolving to `null` after deletion.
+ * @example
+ * ```ts
+ * await deleteApp(app);
+ * ```
+ */
 export async function deleteApp(app: App): Promise<null> {
   if (!(app instanceof App)) {
     const err = new Error("App instance is null!") as Error & { status?: number };
@@ -78,7 +114,16 @@ export async function deleteApp(app: App): Promise<null> {
   return null;
 }
 
-// set log level for all apps
+/**
+ * Sets the log level for every initialized application.
+ *
+ * @param logLevel - The level to apply.
+ * @returns Nothing.
+ * @example
+ * ```ts
+ * setLogLevel(LogLevel.WARN);
+ * ```
+ */
 export function setLogLevel(logLevel: LogLevel): void {
   const apps = getApps();
   for (let i = 0; i < apps.length; i++) {

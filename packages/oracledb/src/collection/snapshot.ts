@@ -31,15 +31,35 @@ import { DocumentChange, DocumentData } from "../types/common.js";
 import { argCheck, oracledbErrorHandler } from "../util/utils.js";
 import { typeStrings } from "../util/utils.js";
 
+const FAILED_REQUEST_SNAPSHOT = Symbol("fusabase.failedRequestSnapshot");
+
+/** @internal */
+export function markQuerySnapshotAsFailedRequest<T extends QuerySnapshot<any, any>>(snapshot: T): T {
+  Object.defineProperty(snapshot, FAILED_REQUEST_SNAPSHOT, { value: true });
+  return snapshot;
+}
+
+/** @internal */
+export function isQuerySnapshotFromFailedRequest(snapshot: QuerySnapshot<any, any>): boolean {
+  return (snapshot as any)[FAILED_REQUEST_SNAPSHOT] === true;
+}
+
 export class QuerySnapshot<AppModelType = DocumentData, DbModelType extends DocumentData = DocumentData> {
   /** @internal */  _docs: 	Array<QueryDocumentSnapshot<AppModelType, DbModelType>>;
+  /** @internal */  _docChanges?: Array<DocumentChange<AppModelType, DbModelType>>;
   public readonly query: any; // Replace with your Query class if available
   public readonly metadata: SnapshotMetadata;
 
-  constructor(snaps: Array<DocumentSnapshot<any, any>>, query: any, metadata: SnapshotMetadata) {
+  constructor(
+    snaps: Array<DocumentSnapshot<any, any>>,
+    query: any,
+    metadata: SnapshotMetadata,
+    docChanges?: Array<DocumentChange<AppModelType, DbModelType>>
+  ) {
     this._docs = snaps as any;
     this.query = query;
     this.metadata = metadata;
+    this._docChanges = docChanges;
   }
 
   /** Number of documents in the snapshot */
@@ -67,6 +87,9 @@ export class QuerySnapshot<AppModelType = DocumentData, DbModelType extends Docu
   }
 
   docChanges(options?: any): Array<DocumentChange<AppModelType, DbModelType>> {
+    if (this._docChanges) {
+      return [...this._docChanges];
+    }
     const docsChanged:any = [];
     this.docs.forEach((doc, idx) => {
       docsChanged.push({

@@ -33,6 +33,10 @@ import { AggregateSpec, DocumentData } from "../types/common.js";
  * Create an AggregateField object that can be used to compute
  * the count of documents in the result set of a query.
  * @returns An AggregateField<number>
+ * @example
+ * ```ts
+ * const total = count();
+ * ```
  */
 export function count(
 ): AggregateField<number> {
@@ -49,6 +53,10 @@ export function count(
  * @param field - Specifies the field to sum across the result set.
  *                Can be a string field name or a FieldPath object.
  * @returns An AggregateField<number>
+ * @example
+ * ```ts
+ * const total = sum('amount');
+ * ```
  */
 export function sum(
   field: string | FieldPath
@@ -63,6 +71,10 @@ export function sum(
  * @param field - Specifies the field to average across the result set.
  *                Can be a string field name or a FieldPath object.
  * @returns An AggregateField<number | null>
+ * @example
+ * ```ts
+ * const mean = average('score');
+ * ```
  */
 export function average(
   field: string | FieldPath
@@ -75,6 +87,10 @@ export function average(
  * @param left - The first AggregateField.
  * @param right - The second AggregateField.
  * @returns `true` if equal, otherwise `false`.
+ * @example
+ * ```ts
+ * const same = aggregateFieldEqual(sum('amount'), sum('amount'));
+ * ```
  */
 export function aggregateFieldEqual(
   left: AggregateField,
@@ -88,6 +104,10 @@ export function aggregateFieldEqual(
  * @param left - The first AggregateQuerySnapshot.
  * @param right - The second AggregateQuerySnapshot.
  * @returns True if both snapshots are equal, otherwise false.
+ * @example
+ * ```ts
+ * const same = aggregateQuerySnapshotEqual(first, second);
+ * ```
  */
 export function aggregateQuerySnapshotEqual
 <AggregateSpecType extends AggregateSpec, AppModelType,

@@ -19,8 +19,8 @@ docs/api-reference/
 ## Notes
 
 - The docs directory might not exist until you run `npm run docs`.
-- The current `typedoc.json` entry points cover `app`, `auth`, `oracledb`, `storage`, and `ui`.
-- `app-trust` is part of the current public package surface, but it is not currently listed in `typedoc.json`. Until that entry point is added, inspect `packages/app-trust/src/index.ts` directly for the public exports.
+- The current `typedoc.json` entry points cover `app`, `auth`, `oracledb`, `storage`, `ui`, and `app-trust` (plus the logger's `LogLevel` type).
+- For the public offline API, use the `oracledb` entry point in the generated reference and `agent_docs/offline.md` for usage and limitations.
 
 ## Useful Local Source Anchors
 
