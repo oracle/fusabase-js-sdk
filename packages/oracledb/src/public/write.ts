@@ -33,6 +33,7 @@ import { UpdateData } from "../types/common.js";
 import { CollectionReference, DualityViewColReference } from "../collection/reference.js";
 import { PartialWithFieldValue, WithFieldValue } from "../types/data.js";
 import { FieldPath } from "../field/path.js";
+import { safeSetOwn } from "../util/utils_helper.js";
 import { Oracledb } from "../internal/core.js";
 import { BulkUpdate } from "../transaction/bulk.js";
 import {
@@ -50,14 +51,14 @@ import {
 } from "./offline.js";
 
 function convertData<AppModelType, DbModelType extends DocumentData>(
-  ref: DocumentReference<AppModelType, DbModelType>,
+  ref: DocumentReference<AppModelType, DbModelType> | DualityViewDocReference<AppModelType, DbModelType>,
   data: unknown
 ): DocumentData {
   return (ref.converter ? ref.converter.toOracledb(data as any) : data) as DocumentData;
 }
 
 async function queueOfflineWrite(
-  ref: DocumentReference<any, any>,
+  ref: DocumentReference<any, any> | DualityViewDocReference<any, any>,
   mutation: OfflineSetWrite | OfflinePatchWrite | OfflineDeleteWrite
 ): Promise<void> {
   await _writeLocallyIfEnabled(ref.oracledb, [mutation]);
@@ -85,18 +86,23 @@ function updateArgsToData(
     const field = fields[index];
     const fieldValue = fields[index + 1];
     const fieldName = field instanceof FieldPath ? field.fullPath : String(field);
-    data[fieldName] = fieldValue;
+    safeSetOwn(data, fieldName, fieldValue);
   }
   return data;
 }
 /**
- * Deletes the document referenced by `ref`.
+ * Deletes the referenced document.
  *
- * @param ref - The document reference to delete.
- * @returns A promise that resolves when the delete is accepted locally or remotely.
+ * @param ref - Document reference to delete.
+ * @returns A promise that resolves when deletion completes.
  * @example
  * ```ts
- * await deleteDoc(profile);
+ * await deleteDoc(taskRef);
+ * ```
+ *
+ * @example
+ * ```ts
+ * await deleteDoc(orderViewRef);
  * ```
  */
 export async function deleteDoc<
@@ -113,12 +119,14 @@ export async function deleteDoc<
     err.status = 400;
     throw oracledbErrorHandler(err);
   }
-  if (ref instanceof DocumentReference && _isOfflineEnabled(ref.oracledb)) {
+  if ((ref instanceof DocumentReference || ref instanceof DualityViewDocReference) && _isOfflineEnabled(ref.oracledb)) {
     return queueOfflineWrite(
       ref,
       new OfflineDeleteWrite(
         OracledbDocumentKey.fromPath(ref.path),
-        OracledbWritePrecondition.none()
+        OracledbWritePrecondition.none(),
+        [],
+        ref instanceof DualityViewDocReference ? 'dualityViewDocument' : 'document'
       )
     );
   }
@@ -126,15 +134,30 @@ export async function deleteDoc<
 }
 
 /**
- * Sets data on a document, optionally merging with existing data.
+ * Writes data to a document, optionally merging it with existing data.
  *
- * @param ref - The document reference to write.
+ * @param ref - Document reference to write.
  * @param data - Data to store in the document.
- * @param options - Optional merge behavior.
- * @returns A promise that resolves when the write is accepted locally or remotely.
+ * @param options - Optional `{ merge }` or `{ mergeFields }` settings.
+ * @returns A promise that resolves when the write completes.
  * @example
  * ```ts
- * await setDoc(profile, { name: 'Ada' }, { merge: true });
+ * await setDoc(taskRef, { title: "Plan" }, { merge: true });
+ * ```
+ *
+ * @example
+ * ```ts
+ * await setDoc(taskRef, { title: "Plan", done: false });
+ * ```
+ *
+ * @example
+ * ```ts
+ * await setDoc(taskRef, { title: "Plan", done: false }, { mergeFields: ["title"] });
+ * ```
+ *
+ * @example
+ * ```ts
+ * await setDoc(orderViewRef, { status: "PAID" });
  * ```
  */
 export async function setDoc<
@@ -153,24 +176,28 @@ export async function setDoc<
     err.status = 400;
     throw oracledbErrorHandler(err);
   }
-  if (ref instanceof DocumentReference && _isOfflineEnabled(ref.oracledb)) {
+  if ((ref instanceof DocumentReference || ref instanceof DualityViewDocReference) && _isOfflineEnabled(ref.oracledb)) {
     const converted = convertData(ref, data);
     const key = OracledbDocumentKey.fromPath(ref.path);
     const isMerge = options?.merge || (options?.mergeFields?.length ?? 0) > 0;
     if (isMerge) {
-      await _ensureDocumentCachedForWrite(ref);
+      await _ensureDocumentCachedForWrite(ref as any);
     }
     const mutation = isMerge
       ? new OfflinePatchWrite(
         key,
         converted,
         options?.mergeFields?.length ? options.mergeFields : Object.keys(converted),
-        OracledbWritePrecondition.exists(true)
+        OracledbWritePrecondition.exists(true),
+        [],
+        ref instanceof DualityViewDocReference ? 'dualityViewDocument' : 'document'
       )
       : new OfflineSetWrite(
         key,
         converted,
-        OracledbWritePrecondition.none()
+        OracledbWritePrecondition.none(),
+        [],
+        ref instanceof DualityViewDocReference ? 'dualityViewDocument' : 'document'
       );
     return queueOfflineWrite(ref, mutation);
   }
@@ -180,13 +207,18 @@ export async function setDoc<
 /**
  * Adds a document to a collection and returns its reference.
  *
- * @param ref - The collection reference that receives the document.
- * @param idOrData - Document data, or an explicit identifier when `data` is supplied.
- * @param data - Data to store when an explicit identifier is supplied.
- * @returns A promise resolving to the new document reference.
+ * @param ref - Collection reference that receives the document.
+ * @param data - Document data. In the explicit-ID overload, pass the identifier
+ * as the second argument and document data as the third argument.
+ * @returns A promise that resolves to the new document reference.
  * @example
  * ```ts
- * const profile = await addDoc(profiles, { name: 'Ada' });
+ * const taskRef = await addDoc(tasks, { title: "Plan" });
+ * ```
+ *
+ * @example Create a document with an explicit identifier.
+ * ```ts
+ * const taskRef = await addDoc(tasks, "task-1", { title: "Plan" });
  * ```
  */
 export async function addDoc<
@@ -235,6 +267,14 @@ export async function addDoc<
     );
     return docRef;
   }
+  if (ref instanceof DualityViewColReference && _isOfflineEnabled(ref.oracledb)) {
+    const err = new Error(
+      "addDoc() cannot be queued offline for a duality view because its document ID is assigned by the server"
+    ) as Error & { status?: number; code?: string };
+    err.status = 501;
+    err.code = "offline-duality-view-add-unsupported";
+    throw oracledbErrorHandler(err);
+  }
   if (typeof idOrData === 'string') {
     const docRef = ref instanceof CollectionReference ? ref.doc(idOrData) : null;
     if (!docRef) {
@@ -250,34 +290,45 @@ export async function addDoc<
 }
 
 /**
- * Updates fields in the referenced document.
+ * Updates one or more fields in the referenced document.
  *
- * @param ref - The document reference to update.
- * @param fieldOrData - A field name and value, or an object containing field updates.
- * @param value - The value associated with `fieldOrData` when it is a field name.
- * @param moreFieldsAndValues - Additional field/value pairs.
- * @returns A promise that resolves when the update is accepted locally or remotely.
+ * @param reference - Document reference to update.
+ * @param field - First field path. For the object overload, pass an update object
+ * as the second argument instead.
+ * @param value - Value for the first field-path overload.
+ * @param moreFieldsAndValues - Remaining field-path/value pairs.
+ * @returns A promise that resolves when the update completes.
  * @example
  * ```ts
- * await updateDoc(profile, { status: 'active' });
+ * await updateDoc(taskRef, { done: true });
+ * ```
+ *
+ * @example Update a string field path.
+ * ```ts
+ * await updateDoc(taskRef, "done", true);
+ * ```
+ *
+ * @example FieldPath and field/value pairs
+ * ```ts
+ * await updateDoc(taskRef, new FieldPath("status", "done"), true, "priority", 1);
  * ```
  */
 export function updateDoc<AppModelType, DbModelType extends DocumentData>
-(reference: DocumentReference<AppModelType, DbModelType>,
+(reference: DocumentReference<AppModelType, DbModelType> | DualityViewDocReference<AppModelType, DbModelType>,
   field: string | FieldPath, value: unknown,
   ...moreFieldsAndValues: unknown[]): Promise<void>;
 export function updateDoc<AppModelType, DbModelType extends DocumentData>
-(ref: DocumentReference<AppModelType, DbModelType>,
+(ref: DocumentReference<AppModelType, DbModelType> | DualityViewDocReference<AppModelType, DbModelType>,
    data: UpdateData<DbModelType>): Promise<void>;
 
 export async function updateDoc<AppModelType, DbModelType extends DocumentData>(
-  ref: DocumentReference<AppModelType, DbModelType>,
+  ref: DocumentReference<AppModelType, DbModelType> | DualityViewDocReference<AppModelType, DbModelType>,
   fieldOrData: string | FieldPath | UpdateData<DbModelType>,
   value?: unknown,
   ...moreFieldsAndValues: unknown[]
 ): Promise<void> {
-  if (ref instanceof DocumentReference && _isOfflineEnabled(ref.oracledb)) {
-    await _ensureDocumentCachedForWrite(ref);
+  if ((ref instanceof DocumentReference || ref instanceof DualityViewDocReference) && _isOfflineEnabled(ref.oracledb)) {
+    await _ensureDocumentCachedForWrite(ref as any);
     const data = updateArgsToData(fieldOrData, value, moreFieldsAndValues);
     return queueOfflineWrite(
       ref,
@@ -285,7 +336,9 @@ export async function updateDoc<AppModelType, DbModelType extends DocumentData>(
         OracledbDocumentKey.fromPath(ref.path),
         data,
         Object.keys(data),
-        OracledbWritePrecondition.exists(true)
+        OracledbWritePrecondition.exists(true),
+        [],
+        ref instanceof DualityViewDocReference ? 'dualityViewDocument' : 'document'
       )
     );
   }
@@ -297,6 +350,17 @@ export async function updateDoc<AppModelType, DbModelType extends DocumentData>(
   }
 }
 
+/**
+ * Creates a bulk-update builder for a document-data service or path.
+ *
+ * @param reference - Document-data service that owns the target path.
+ * @param path - Optional path to update.
+ * @returns The bulk-update builder.
+ * @example
+ * ```ts
+ * const updates = updateDocs(database, "tasks");
+ * ```
+ */
 export function updateDocs<
   AppModelType,
   DbModelType extends DocumentData

@@ -1,0 +1,30 @@
+{
+  "name": "@fusabase/fusabase-relational",
+  "version": "26.3.1",
+  "type": "module",
+  "description": "Oracle Backend for Firebase relational SDK package",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*",
+      "import": "./dist/*"
+    }
+  },
+  "peerDependencies": {
+    "@fusabase/app": "26.3.1"
+  },
+  "dependencies": {
+    "@fusabase/auth-core": "26.3.1",
+    "@fusabase/relational": "26.3.1",
+    "tslib": "^2.8.1"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}

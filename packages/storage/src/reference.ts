@@ -65,9 +65,15 @@ async function assertMetadataWithinDownloadLimit(
  * @param storage - The Storage instance or StorageReference.
  * @param path - The path to the storage object.
  * @returns A StorageReference.
+ * @throws {StorageError} If the storage input is invalid or a URL is used with a child reference.
  * @example
  * ```ts
- * const avatar = ref(storage, 'avatars/ada.png');
+ * const fileRef = ref(storage, "images/logo.png");
+ * ```
+ *
+ * @example Create a child reference from another reference.
+ * ```ts
+ * const thumbnailRef = ref(fileRef, "thumbnail.png");
  * ```
  */
 export function ref(storage: Storage | StorageReference, path: string): StorageReference {
@@ -95,9 +101,15 @@ export function ref(storage: Storage | StorageReference, path: string): StorageR
  * @param ref - The StorageReference to download data from.
  * @param maxDownloadSizeBytes - The maximum size of data to download in bytes, or null for no limit.
  * @returns A promise that resolves with the ArrayBuffer.
+ * @throws {StorageError} If the reference or size limit is invalid, the object exceeds the limit, or download fails.
  * @example
  * ```ts
- * const bytes = await getBytes(avatar, 5 * 1024 * 1024);
+ * const bytes = await getBytes(fileRef, 5_000_000);
+ * ```
+ *
+ * @example Download without a size limit.
+ * ```ts
+ * const bytes = await getBytes(fileRef, null);
  * ```
  */
 export async function getBytes(ref: StorageReference, maxDownloadSizeBytes: number | null): Promise<ArrayBuffer> {
@@ -120,9 +132,15 @@ export async function getBytes(ref: StorageReference, maxDownloadSizeBytes: numb
  * @param ref - The StorageReference to download data from.
  * @param maxDownloadSizeBytes - The maximum size of data to download in bytes, or null for no limit.
  * @returns A promise that resolves with the Blob.
+ * @throws {StorageError} If the reference or size limit is invalid, the object exceeds the limit, or download fails.
  * @example
  * ```ts
- * const blob = await getBlob(avatar, null);
+ * const blob = await getBlob(fileRef, 5_000_000);
+ * ```
+ *
+ * @example Download without a size limit.
+ * ```ts
+ * const blob = await getBlob(fileRef, null);
  * ```
  */
 export async function getBlob(ref: StorageReference, maxDownloadSizeBytes: number | null): Promise<Blob> {
@@ -145,9 +163,15 @@ export async function getBlob(ref: StorageReference, maxDownloadSizeBytes: numbe
  * @param ref - The StorageReference to download data from.
  * @param maxDownloadSizeBytes - The maximum size of data to download in bytes, or null for no limit.
  * @returns A promise that resolves with the response stream.
+ * @throws {StorageError} If the reference or size limit is invalid, the object exceeds the limit, or download fails.
  * @example
  * ```ts
- * const response = await getStream(avatar, null);
+ * const stream = await getStream(fileRef, 5_000_000);
+ * ```
+ *
+ * @example Download without a size limit.
+ * ```ts
+ * const stream = await getStream(fileRef, null);
  * ```
  */
 export async function getStream(ref: StorageReference, maxDownloadSizeBytes: number | null): Promise<any> {
@@ -164,9 +188,10 @@ export async function getStream(ref: StorageReference, maxDownloadSizeBytes: num
  * Deletes the object at the given reference.
  * @param ref - The StorageReference to delete the object at.
  * @returns A promise that resolves when the object is deleted.
+ * @throws {StorageError} If the reference is invalid or deletion fails.
  * @example
  * ```ts
- * await deleteObject(avatar);
+ * await deleteObject(fileRef);
  * ```
  */
 export async function deleteObject(ref: StorageReference): Promise<void> {
@@ -181,17 +206,33 @@ export async function deleteObject(ref: StorageReference): Promise<void> {
 /**
  * Gets the download URL for the given reference.
  * @param ref - The StorageReference to get the download URL for.
+ * @param timeExpires - Optional expiry time as a Date or date-time string. It
+ * is sent to the service as an RFC3339 `timeExpires` value.
  * @returns A promise that resolves with the download URL.
+ * @throws {StorageError} If the reference or expiration value is invalid, or URL retrieval fails.
  * @example
  * ```ts
- * const url = await getDownloadURL(avatar);
+ * const url = await getDownloadURL(fileRef);
+ * ```
+ *
+ * @example Date expiry
+ * ```ts
+ * const url = await getDownloadURL(fileRef, new Date("2027-01-01T00:00:00Z"));
+ * ```
+ *
+ * @example Pass an expiry as an RFC3339 string.
+ * ```ts
+ * const url = await getDownloadURL(fileRef, "2027-01-01T00:00:00Z");
  * ```
  */
-export async function getDownloadURL(ref: StorageReference): Promise<string> {
+export async function getDownloadURL(
+  ref: StorageReference,
+  timeExpires?: Date | string
+): Promise<string> {
   if (!(ref instanceof StorageReference)) {
     let error = new StorageError(StorageErrorCode.INVALID_ARGUMENT, getStorageErrorMessage('INVALID_REFERENCE'));
     error.status = 400;
     throw storageErrorHandler(error);
   }
-  return ref.getDownloadURL();
+  return ref.getDownloadURL(timeExpires);
 }

@@ -34,6 +34,11 @@ import type { ListOptions, UploadMetadata, FullMetadata } from "../types.js";
 
 /**
  * Class representing a reference to a storage location.
+ *
+ * @example
+ * ```ts
+ * const fileRef = ref(storage, "images/logo.png");
+ * ```
  */
 export class StorageReference {
   /** The name of the storage object. */
@@ -226,13 +231,13 @@ export class StorageReference {
   /**
    * @internal
    */
-  async getDownloadURL(): Promise<string> {
+  async getDownloadURL(timeExpires?: Date | string): Promise<string> {
     const access_token = await getAccessToken(this.storage.app);
 
     let result = null;
 
     try {
-      result = await this.storage.__fetchDownloadUrl(`${this.fullPath}`, access_token);
+      result = await this.storage.__fetchDownloadUrl(`${this.fullPath}`, access_token, timeExpires);
     }
     catch (err) {
       throw storageErrorHandler(err);

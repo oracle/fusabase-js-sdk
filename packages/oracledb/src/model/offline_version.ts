@@ -25,17 +25,67 @@
 //-----------------------------------------------------------------------------
 // 
 
+/** Represents a document version. @example `const version = OracledbDocumentVersion.min();` */
 export class OracledbDocumentVersion {
+/**
+ * Constructs a OracledbDocumentVersion instance with the supplied configuration.
+ *
+ * @param value - The value to store or transform.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { OracledbDocumentVersion } from "fusabase/oracledb";
+ * const result = new OracledbDocumentVersion({ title: "Example" });
+ * void result;
+ * ```
+ */
   constructor(readonly value: string = '') {}
 
+/**
+ * Executes the isEqual operation for this public SDK type.
+ *
+ * @param other - The value to compare with this value.
+ * @returns The result produced by `isEqual`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { OracledbDocumentVersion } from "fusabase/oracledb";
+ * const result = new OracledbDocumentVersion("1").isEqual(new OracledbDocumentVersion("1"));
+ * void result;
+ * ```
+ */
   isEqual(other: OracledbDocumentVersion): boolean {
     return this.value === other.value;
   }
 }
 
+/** Represents a snapshot version. @example `const version = OracledbSnapshotVersion.min();` */
 export class OracledbSnapshotVersion {
+/**
+ * Constructs a OracledbSnapshotVersion instance with the supplied configuration.
+ *
+ * @param value - The value to store or transform.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { OracledbSnapshotVersion } from "fusabase/oracledb";
+ * const result = new OracledbSnapshotVersion({ title: "Example" });
+ * void result;
+ * ```
+ */
   constructor(readonly value: string = '') {}
 
+/**
+ * Executes the isEqual operation for this public SDK type.
+ *
+ * @param other - The value to compare with this value.
+ * @returns The result produced by `isEqual`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { OracledbSnapshotVersion } from "fusabase/oracledb";
+ * const result = new OracledbSnapshotVersion("1").isEqual(new OracledbSnapshotVersion("1"));
+ * void result;
+ * ```
+ */
   isEqual(other: OracledbSnapshotVersion): boolean {
     return this.value === other.value;
   }

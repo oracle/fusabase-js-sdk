@@ -23,7 +23,7 @@
 // limitations under the License.
 //
 //-----------------------------------------------------------------------------
-// 
+//
 
 import { App } from "../../app/src/public-types.js";
 import fusabase from "../../app/src/fusabase-internal.js";
@@ -36,9 +36,20 @@ import { Storage } from "./internal/storage.js";
  * @param app - The FUSABASE app instance.
  * @param url - The storage URL.
  * @returns A Storage instance.
+ * @throws {StorageError} If the supplied app is invalid.
  * @example
  * ```ts
  * const storage = getStorage(app);
+ * ```
+ *
+ * @example Use the default app.
+ * ```ts
+ * const storage = getStorage();
+ * ```
+ *
+ * @example Use a storage endpoint override.
+ * ```ts
+ * const storage = getStorage(app, "https://storage.example.com");
  * ```
  */
 export function getStorage(app?: App | null, url?: string): Storage {

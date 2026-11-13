@@ -36,6 +36,14 @@ import { DocumentSnapshot } from './snapshot.js';
 import { SnapshotMetadata } from '../listener/snapshot.js';
 import { IdTokenResult } from '../../../auth/src/types/idtoken.js';
 
+/**
+ * Represents a reference to one document.
+ *
+ * @example
+ * ```ts
+ * const task = doc(database, "tasks/task-1");
+ * ```
+ */
 export class DocumentReference<
   AppModelType = DocumentData,
   DbModelType extends DocumentData = DocumentData
@@ -44,15 +52,34 @@ export class DocumentReference<
   /** @internal */  _queryHelper: QueryHelper | null = null;
   /** @internal */
   /** @internal */  _rt: number = 0;
+/** Describes the public `converter` value. */
   converter: OracledbDataConverter<AppModelType, DbModelType> | null = null;
+/** Describes the public `oracledb` value. */
   readonly oracledb: any;
+/** Describes the public `type` value. */
   readonly type: string = "document";
+/** Describes the public `id` value. */
   readonly id: string;
+/** Describes the public `parent` value. */
   readonly parent: CollectionReference<AppModelType, DbModelType>;
   /** @internal */
   /** @internal */  _path: string[];
   /** @internal */ _serverTimestamp:any[] = [];
   
+/**
+ * Constructs a DocumentReference instance with the supplied configuration.
+ *
+ * @param db - The database instance to use.
+ * @param path - The relative resource path.
+ * @param parent - The parent accepted by this operation.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { DocumentReference } from "fusabase/oracledb";
+ * const result = new DocumentReference(value, "example", value);
+ * void result;
+ * ```
+ */
   constructor(
     db: any,
     path?: string,
@@ -319,11 +346,11 @@ export class DocumentReference<
     const payload = {
       path: this._path,
       conditions: [] as any[],
-      explicitOrder: [] as any[],
       access_token: access_token ? access_token.claims.sub : null
     };
 
-    const mappedQueryId = Math.abs(snapHashcode(JSON.stringify(payload)));
+    const snapshotKey = JSON.stringify(payload);
+    let realtimeGeneration = this.oracledb.__getRealtimeGeneration();
     delete (payload as any)["access_token"];
     const queryId = Math.abs(snapHashcode(JSON.stringify(payload)));
 
@@ -342,9 +369,14 @@ export class DocumentReference<
       !this.oracledb._settings.experimentalForceLongPolling
     ) {
       // WebSocket-based snapshot
-      this.oracledb.__createSocket(access_token ? access_token.token : null);
-
+      this.oracledb.__registerSnapshotQuery(queryId, snapshotKey);
       const queryObject = { queryId, status: 1, payload };
+      this.oracledb.__registerRealtimeSubscription(queryId, queryObject);
+      this.oracledb.__createSocket(access_token ? access_token.token : null)
+        .catch((error: unknown) => {
+          Utils.baasLogger(this.oracledb.app.logLevel, "Unable to establish realtime socket", error);
+        });
+      realtimeGeneration = this.oracledb.__getRealtimeGeneration();
 
       if (!Utils.memberExists(this.oracledb.__snaps, queryId)) {
         this.oracledb.__snaps[queryId] = [];
@@ -354,21 +386,20 @@ export class DocumentReference<
 
       this.oracledb.__snaps[queryId].push(_queryId);
       this.oracledb.__callbacks[_queryId] = callback;
-      this.oracledb.__queryIdMap[queryId] = mappedQueryId;
-
       this.get()
-        .then((docSnap) => {
-          handleSnapshot(docSnap);
-          this.oracledb.__setIndexDB({
-            queryId: mappedQueryId,
+        .then(async (docSnap) => {
+          if (realtimeGeneration !== this.oracledb.__getRealtimeGeneration()) {
+            return;
+          }
+          await this.oracledb.__setIndexDB({
+            queryId: snapshotKey,
             snap: docSnap,
             type: "document",
             path: this._path.join("/")
-          })
-            .then(() => {
-              Utils.baasLogger(this.oracledb.app.logLevel, "added indexed db for document", _queryId);
-            })
-            .catch((e:any) => Utils.baasLogger(this.oracledb.app.logLevel, e));
+          });
+          Utils.baasLogger(this.oracledb.app.logLevel, "added indexed db for document", _queryId);
+          handleSnapshot(docSnap);
+          this.oracledb.__markInitialSnapshotReady(queryId);
         })
         .catch((e) => {
           if (callback.error) {
@@ -382,17 +413,23 @@ export class DocumentReference<
 
       unsubscribe = () => {
         Utils.baasLogger(this.oracledb.app.logLevel, "in unsubscribe for document", this.oracledb.__snaps[queryId]);
-        const index = this.oracledb.__snaps[queryId].indexOf(_queryId);
+        const activeListeners = this.oracledb.__snaps[queryId];
+        if (!activeListeners) {
+          callback = { next: null, complete: null, error: null };
+          return;
+        }
+        const index = activeListeners.indexOf(_queryId);
         if (index > -1) {
-          this.oracledb.__snaps[queryId].splice(index, 1);
+          activeListeners.splice(index, 1);
           delete this.oracledb.__callbacks[_queryId];
         }
 
         const unSubQueryObject = { queryId, status: 0, payload };
 
-        if (this.oracledb.__snaps[queryId].length === 0) {
+        if (activeListeners.length === 0) {
           delete this.oracledb.__queryIdMap[queryId];
           delete this.oracledb.__snaps[queryId];
+          this.oracledb.__unregisterRealtimeSubscription(queryId);
           this.oracledb.__sendMessage(unSubQueryObject);
         }
 
@@ -450,9 +487,18 @@ export class DocumentReference<
     return () => unsubscribe();
   }
 
-  /**
-   * Applies a custom data converter to this DocumentReference.
-   */
+/**
+ * Executes the withConverter operation for this public SDK type.
+ *
+ * @param converter - The converter accepted by this operation.
+ * @returns The result produced by `withConverter`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { DocumentReference } from "fusabase/oracledb";
+ * const result = client.withConverter(value);
+ * void result;
+ * ```
+ */
   withConverter<NewAppModelType, NewDbModelType extends DocumentData>(
     converter: OracledbDataConverter<NewAppModelType, NewDbModelType>
   ): DocumentReference<NewAppModelType, NewDbModelType>;
@@ -481,19 +527,46 @@ function snapshotVersionMarker(docSnap: any): string {
 /* ===========================
    DualityViewDocReference
    =========================== */
+/**
+ * Represents a reference to one duality-view document.
+ *
+ * @example
+ * ```ts
+ * const order = dualityViewDoc(database, "orders/1001");
+ * ```
+ */
 export class DualityViewDocReference<
   AppModelType = DocumentData,
   DbModelType extends DocumentData = DocumentData
 > {
   private _queryHelper: QueryHelper | null = null;
   private _rt: number = 0;
+/** Describes the public `converter` value. */
   converter: any;
+/** Describes the public `oracledb` value. */
   oracledb: any;
+/** Describes the public `id` value. */
   id: string;
+/** Describes the public `type` value. */
   type: string;
+/** Describes the public `parent` value. */
   parent: DualityViewColReference<AppModelType, DbModelType>;
   /** @internal */  _path: string[];
 
+/**
+ * Constructs a DualityViewDocReference instance with the supplied configuration.
+ *
+ * @param db - The database instance to use.
+ * @param path - The relative resource path.
+ * @param parent - The parent accepted by this operation.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { DualityViewDocReference } from "fusabase/oracledb";
+ * const result = new DualityViewDocReference(value, "example", value);
+ * void result;
+ * ```
+ */
   constructor(db: any, path: string, parent: DualityViewColReference<any, any> | null = null) {
     if ((path == null || path === '') && parent == null) {
       const error: any = new Error('Both path and parent cannot be null!');
@@ -551,6 +624,18 @@ export class DualityViewDocReference<
     return this._path.join('/');
   }
 
+/**
+ * Executes the isEqual operation for this public SDK type.
+ *
+ * @param docRef - The document reference to read or modify.
+ * @returns The result produced by `isEqual`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { DualityViewDocReference } from "fusabase/oracledb";
+ * const result = client.isEqual(value);
+ * void result;
+ * ```
+ */
   isEqual(docRef: any): boolean {
     if (!(docRef instanceof DualityViewDocReference)) {
       const error: any = new Error(
@@ -673,6 +758,20 @@ export class DualityViewDocReference<
     Utils.baasLogger(this.oracledb.app.logLevel, 'deleteDoc called');
   }
 
+/**
+ * Executes the set operation for this public SDK type.
+ *
+ * @param data_obj - The data_obj accepted by this operation.
+ * @param setOptions - The setOptions accepted by this operation.
+ * @param trans_obj - The trans_obj accepted by this operation.
+ * @returns The result produced by `set`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { DualityViewDocReference } from "fusabase/oracledb";
+ * const result = client.set({ title: "Example" }, value, value);
+ * void result;
+ * ```
+ */
   async set(data_obj: any, setOptions?: { merge?: boolean; mergeFields?: string[] } | null, trans_obj: any = null): Promise<void> {
     if (this.converter != null) {
       data_obj = this.converter.toOracledb(data_obj);
@@ -749,9 +848,18 @@ export class DualityViewDocReference<
     }
   }
 
-  /**
-   * Applies a custom data converter to this DualityViewDocReference.
-   */
+/**
+ * Executes the withConverter operation for this public SDK type.
+ *
+ * @param converter - The converter accepted by this operation.
+ * @returns The result produced by `withConverter`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { DualityViewDocReference } from "fusabase/oracledb";
+ * const result = client.withConverter(value);
+ * void result;
+ * ```
+ */
   withConverter<NewAppModelType, NewDbModelType extends DocumentData>(
     converter: OracledbDataConverter<NewAppModelType, NewDbModelType>
   ): DualityViewDocReference<NewAppModelType, NewDbModelType>;

@@ -1,4 +1,4 @@
-// Copyright (c) 2015, 2026, Oracle and/or its affiliates.
+// Copyright (c) 2015, 2025, Oracle and/or its affiliates.
 
 //-----------------------------------------------------------------------------
 //
@@ -25,13 +25,5 @@
 //-----------------------------------------------------------------------------
 // 
 
-/**
- * @internal
- */
-enum PersistenceType {
-  LOCAL = "LOCAL",
-  SESSION = "SESSION",
-  NONE = "NONE"
-}
-
-export default PersistenceType;
+export { default } from "../../../../auth-core/src/helpers/persistence/PersistenceType.js";
+export * from "../../../../auth-core/src/helpers/persistence/PersistenceType.js";

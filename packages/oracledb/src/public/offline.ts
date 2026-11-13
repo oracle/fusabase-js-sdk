@@ -27,7 +27,7 @@
 
 import { CollectionReference, DualityViewColReference, Query } from '../collection/reference.js';
 import { isQuerySnapshotFromFailedRequest, QuerySnapshot } from '../collection/snapshot.js';
-import { DocumentReference } from '../document/reference.js';
+import { DocumentReference, DualityViewDocReference } from '../document/reference.js';
 import { DocumentSnapshot } from '../document/snapshot.js';
 import { Oracledb } from '../internal/core.js';
 import { OfflineEventHub, OfflineSyncCoordinator } from '../core/index.js';
@@ -40,7 +40,7 @@ import {
 } from '../local/index.js';
 import type { OfflineCachedDocument, OfflineOptions, OfflinePersistence, OfflineQueryTarget } from '../local/index.js';
 import { OfflineWriteBatchSource, OfflineWriteMutation, OracledbDocumentKey, OracledbDocumentVersion } from '../model/index.js';
-import { OfflineConnectivityTracker, OfflineOnlineStateTracker, OfflineRemoteStore, OfflineRemoteWatch, OfflineSharedClientState, OfflineTabCoordinator } from '../remote/index.js';
+import { OfflineConnectivityTracker, OfflineOnlineStateTracker, OfflineRemoteStore, OfflineRemoteWatch, OfflineRealtimeUnavailableError, OfflineSharedClientState, OfflineTabCoordinator } from '../remote/index.js';
 import type {
   OfflineOnlineState,
   OfflineRemoteWatchDocumentChange,
@@ -53,8 +53,11 @@ import { getToken } from '../util/utils.js';
 import { canonicalIdForTarget } from '../local/offline_query_engine.js';
 import { matchesQueryFilters } from '../local/offline_query_matcher.js';
 
+/** Describes the public `PersistentLocalCacheOptions` value. */
 export type PersistentLocalCacheOptions = {
+/** Describes the public `cacheSizeBytes` value. */
   cacheSizeBytes?: number;
+/** Describes the public `synchronizeTabs` value. */
   synchronizeTabs?: boolean;
 };
 
@@ -89,7 +92,9 @@ type PendingWriteResolver = {
 type SnapshotTarget =
   | Query<any, any>
   | CollectionReference<any, any>
-  | DocumentReference<any, any>;
+  | DualityViewColReference<any, any>
+  | DocumentReference<any, any>
+  | DualityViewDocReference<any, any>;
 
 type ActiveTargetRef = {
   target: SnapshotTarget;
@@ -110,9 +115,28 @@ function getDbFromRefOrQuery(source: any): Oracledb {
   return db;
 }
 
+function offlinePersistenceDatabaseName(db: Oracledb): string {
+  let endpoint = String(db.app.options.ordsHost ?? '');
+  try {
+    endpoint = new URL(endpoint).toString();
+  } catch {
+    // App configuration validation owns endpoint validity; preserve it here.
+  }
+  const namespace = JSON.stringify({
+    version: 2,
+    appName: db.app.name,
+    endpoint,
+    projectId: db.app.options.projectID ?? '',
+    appId: db.app.options.appID ?? '',
+    schema: db.app.options.schema ?? '',
+    backendType: db.app.options.backendType ?? '',
+  });
+  return `FUSABASE_OFFLINE_DB2:${encodeURIComponent(namespace)}`;
+}
+
 function createState(db: Oracledb, persistence: OfflinePersistence, options?: OfflineOptions): OfflineState {
   const localStore = new OfflineLocalStore(persistence, currentUserId(db));
-  const databaseName = `${db.app.options.appID ?? db.app.name}-oracledb-offline`;
+  const databaseName = offlinePersistenceDatabaseName(db);
   const state: OfflineState = {
     persistence,
     localStore,
@@ -164,7 +188,7 @@ function createState(db: Oracledb, persistence: OfflinePersistence, options?: Of
   state.eventHub = new OfflineEventHub(async (target, listenOptions) => {
     await syncCurrentUserForActiveTargets(state, db);
     const forceFromCache = shouldForceSnapshotFromCache(state, target, listenOptions);
-    if (target instanceof DocumentReference) {
+    if (target instanceof DocumentReference || target instanceof DualityViewDocReference) {
       return state.queryEngine.getDocumentFromCache(target, forceFromCache);
     }
     return state.queryEngine.getDocumentsFromCache(target as Query<any, any>, forceFromCache);
@@ -198,7 +222,8 @@ function createState(db: Oracledb, persistence: OfflinePersistence, options?: Of
     },
     () => state.onlineStateTracker.handleRemoteAttemptStart(),
     () => state.onlineStateTracker.handleRemoteSuccess(),
-    () => state.onlineStateTracker.handleRemoteFailure()
+    () => state.onlineStateTracker.handleRemoteFailure(),
+    () => currentUserId(db)
   );
   state.remoteWatch = new OfflineRemoteWatch(db);
   state.syncCoordinator = new OfflineSyncCoordinator({
@@ -252,7 +277,7 @@ function defaultPersistence(db: Oracledb, options?: OfflineOptions): OfflinePers
   if (options?.persistence === 'memory') {
     return new OfflineMemoryPersistence(options.cacheSizeBytes);
   }
-  const databaseName = `${db.app.options.appID ?? db.app.name}-oracledb-offline`;
+  const databaseName = offlinePersistenceDatabaseName(db);
   return new OfflineIndexedDbPersistence(databaseName, options?.cacheSizeBytes);
 }
 
@@ -271,11 +296,40 @@ async function setPersistence(db: Oracledb, persistence: OfflinePersistence, opt
   await persistence.start();
   const state = createState(db, persistence, options);
   OFFLINE_STATE.set(db, state);
+  db.__setOfflineShutdown(() => shutdownOffline(db));
   if (canUseNetwork(state)) {
     state.remoteStore.resumeNetwork(true)
       .then(() => attachActiveRemoteListeners(state))
       .catch(() => undefined);
   }
+}
+
+/** @internal Releases offline listeners, timers, transports, and persistence handles. */
+export async function shutdownOffline(db: Oracledb): Promise<void> {
+  const state = OFFLINE_STATE.get(db);
+  if (!state) return;
+  OFFLINE_STATE.delete(db);
+  state.unsubscribeConnectivityListener?.();
+  state.unsubscribeRemoteFailureListener?.();
+  for (const active of state.activeTargetRefs.values()) {
+    clearRemoteListenerRetry(active);
+    try {
+      active.remoteUnsubscribe?.();
+    } catch {
+      // Continue releasing the remaining resources.
+    }
+  }
+  state.activeTargetRefs.clear();
+  rejectPendingWriteCallbacks(
+    state,
+    [...state.pendingWriteResolvers.keys()],
+    new Error('Offline support was terminated')
+  );
+  state.onlineStateTracker.shutdown();
+  state.sharedClientState.shutdown();
+  state.tabCoordinator.shutdown();
+  await state.remoteStore.pauseNetwork();
+  await state.persistence.shutdown();
 }
 
 function getOfflineState(db: Oracledb): OfflineState {
@@ -599,10 +653,10 @@ export function _assertServerReadable(db: Oracledb): void {
 }
 
 export function _getDocFromCacheIfEnabled<AppModelType>(
-  ref: DocumentReference<AppModelType>
+  ref: DocumentReference<AppModelType> | DualityViewDocReference<AppModelType>
 ): Promise<DocumentSnapshot<AppModelType>> | null {
   const state = maybeGetOfflineState(ref.oracledb);
-  return state ? state.syncCoordinator.getDocument(ref, 'cache') : null;
+  return state ? state.syncCoordinator.getDocument(ref as any, 'cache') : null;
 }
 
 export function _getDocsFromCacheIfEnabled<AppModelType, DbModelType>(
@@ -616,7 +670,7 @@ export function _getDocsFromCacheIfEnabled<AppModelType, DbModelType>(
 function getDocumentFromCacheForState<AppModelType>(
   state: OfflineState,
   db: Oracledb,
-  ref: DocumentReference<AppModelType>
+  ref: DocumentReference<AppModelType> | DualityViewDocReference<AppModelType>
 ): Promise<DocumentSnapshot<AppModelType>> {
   return syncCurrentUserForActiveTargets(state, db)
     .then(() => state.queryEngine.getDocumentFromCache(ref, true));
@@ -632,20 +686,20 @@ function getDocumentsFromCacheForState<AppModelType>(
 }
 
 export function _listenOfflineIfEnabled<AppModelType>(
-  target: Query<AppModelType, any> | CollectionReference<AppModelType, any> | DocumentReference<AppModelType, any>,
+  target: Query<AppModelType, any> | CollectionReference<AppModelType, any> | DualityViewColReference<AppModelType, any> | DocumentReference<AppModelType, any> | DualityViewDocReference<AppModelType, any>,
   options: ListenOptions,
   observer: ListenObserver<QuerySnapshot<AppModelType, any> | DocumentSnapshot<AppModelType, any>>
 ): Unsubscribe | null {
   const db = getDbFromRefOrQuery(target);
   const state = maybeGetOfflineState(db);
   if (!state) return null;
-  return state.syncCoordinator.listen(target, options, observer);
+  return state.syncCoordinator.listen(target as any, options, observer);
 }
 
 function listenOfflineForState<AppModelType>(
   state: OfflineState,
   db: Oracledb,
-  target: Query<AppModelType, any> | CollectionReference<AppModelType, any> | DocumentReference<AppModelType, any>,
+  target: Query<AppModelType, any> | CollectionReference<AppModelType, any> | DualityViewColReference<AppModelType, any> | DocumentReference<AppModelType, any> | DualityViewDocReference<AppModelType, any>,
   options: ListenOptions,
   observer: ListenObserver<QuerySnapshot<AppModelType, any> | DocumentSnapshot<AppModelType, any>>
 ): Unsubscribe {
@@ -674,7 +728,7 @@ function listenOfflineForState<AppModelType>(
       }
     })
     .catch(error => observer.error?.(error as Error));
-  const unsubscribe = state.eventHub.listen(target, options, observer);
+  const unsubscribe = state.eventHub.listen(target as any, options, observer);
   return () => {
     cancelled = true;
     unsubscribe();
@@ -702,16 +756,16 @@ function listenOfflineForState<AppModelType>(
   };
 }
 
-export async function _hasPendingWritesForDocument(ref: DocumentReference<any, any>): Promise<boolean> {
+export async function _hasPendingWritesForDocument(ref: DocumentReference<any, any> | DualityViewDocReference<any, any>): Promise<boolean> {
   const state = maybeGetOfflineState(ref.oracledb);
   if (!state) return false;
-  return state.syncCoordinator.hasPendingWritesForDocument(ref);
+  return state.syncCoordinator.hasPendingWritesForDocument(ref as any);
 }
 
 async function hasPendingWritesForDocumentForState(
   state: OfflineState,
   db: Oracledb,
-  ref: DocumentReference<any, any>
+  ref: DocumentReference<any, any> | DualityViewDocReference<any, any>
 ): Promise<boolean> {
   await syncCurrentUserForActiveTargets(state, db);
   return state.localStore.hasPendingWrites(OracledbDocumentKey.fromPath(ref.path));
@@ -726,7 +780,7 @@ export async function _getPendingCacheSnapshotForQuery<AppModelType, DbModelType
 }
 
 export function _getDocViaSnapshotIfEnabled<AppModelType>(
-  ref: DocumentReference<AppModelType>
+  ref: DocumentReference<AppModelType> | DualityViewDocReference<AppModelType>
 ): Promise<DocumentSnapshot<AppModelType>> | null {
   const state = maybeGetOfflineState(ref.oracledb);
   if (!state) return null;
@@ -734,7 +788,7 @@ export function _getDocViaSnapshotIfEnabled<AppModelType>(
 }
 
 export function _getDocsViaSnapshotIfEnabled<AppModelType, DbModelType>(
-  query: Query<AppModelType, any> | CollectionReference<AppModelType, any>
+  query: Query<AppModelType, any> | CollectionReference<AppModelType, any> | DualityViewColReference<AppModelType, any>
 ): Promise<QuerySnapshot<AppModelType, any>> | null {
   const db = getDbFromRefOrQuery(query);
   const state = maybeGetOfflineState(db);
@@ -783,15 +837,13 @@ async function writeLocallyForState(
 }
 
 /**
- * Waits until all writes queued by this client before the call have either
- * been acknowledged or rejected by the remote service.
+ * Waits until all pending local writes have been acknowledged.
  *
- * @param {Oracledb} db - The OracleDB instance whose pending writes are observed.
- * @returns {Promise<void>} A promise that resolves after the queued writes are acknowledged.
+ * @param db - Document-data service whose pending writes are observed.
+ * @returns A promise that resolves when no pending writes remain.
  * @example
  * ```ts
- * await setDoc(doc(db, "tasks", "task-1"), { completed: true });
- * await waitForPendingWrites(db);
+ * await waitForPendingWrites(database);
  * ```
  */
 export async function waitForPendingWrites(db: Oracledb): Promise<void> {
@@ -818,7 +870,7 @@ async function waitForPendingWritesForState(state: OfflineState, db: Oracledb): 
 }
 
 function readOnceViaOfflineListener(
-  target: Query<any, any> | CollectionReference<any, any> | DocumentReference<any, any>
+  target: SnapshotTarget
 ): Promise<QuerySnapshot<any, any> | DocumentSnapshot<any, any>> {
   return new Promise((resolve, reject) => {
     let unsubscribe: Unsubscribe = () => undefined;
@@ -846,16 +898,14 @@ function readOnceViaOfflineListener(
 }
 
 /**
- * Enables local persistence, cached reads, queued writes, and synchronization
- * for an OracleDB instance. IndexedDB persistence is used unless options
- * select memory persistence.
+ * Enables persistent offline behavior for a document-data service.
  *
- * @param {Oracledb} db - The OracleDB instance to configure for offline operation.
- * @param {OfflineOptions} [options] - Persistence kind, cache size, and tab-synchronization options.
- * @returns {Promise<void>} A promise that resolves when local persistence is ready.
+ * @param db - Service to configure.
+ * @param options - Optional cache and synchronization settings.
+ * @returns A promise that resolves when offline behavior is enabled.
  * @example
  * ```ts
- * await enableOffline(db, { persistence: "indexeddb", cacheSizeBytes: 10 * 1024 * 1024 });
+ * await enableOffline(database, persistentLocalCache());
  * ```
  */
 export function enableOffline(db: Oracledb, options?: OfflineOptions): Promise<void> {
@@ -863,29 +913,28 @@ export function enableOffline(db: Oracledb, options?: OfflineOptions): Promise<v
 }
 
 /**
- * Enables local persistence backed by IndexedDB for an OracleDB instance.
+ * Enables browser-backed persistent storage for a document-data service.
  *
- * @param {Oracledb} db - The OracleDB instance to configure.
- * @returns {Promise<void>} A promise that resolves when IndexedDB persistence is ready.
+ * @param db - Service to configure.
+ * @returns A promise that resolves when persistence is enabled.
  * @example
  * ```ts
- * await enableIndexedDbPersistence(db);
+ * await enableIndexedDbPersistence(database);
  * ```
  */
 export function enableIndexedDbPersistence(db: Oracledb): Promise<void> {
-  const databaseName = `${db.app.options.appID ?? db.app.name}-oracledb-offline`;
+  const databaseName = offlinePersistenceDatabaseName(db);
   return setPersistence(db, new OfflineIndexedDbPersistence(databaseName));
 }
 
 /**
- * Enables local persistence held only in memory for an OracleDB instance.
- * Cached data is discarded when the application process ends.
+ * Enables in-memory persistence for a document-data service.
  *
- * @param {Oracledb} db - The OracleDB instance to configure.
- * @returns {Promise<void>} A promise that resolves when memory persistence is ready.
+ * @param db - Service to configure.
+ * @returns A promise that resolves when persistence is enabled.
  * @example
  * ```ts
- * await enableMemoryPersistence(db);
+ * await enableMemoryPersistence(database);
  * ```
  */
 export function enableMemoryPersistence(db: Oracledb): Promise<void> {
@@ -893,13 +942,13 @@ export function enableMemoryPersistence(db: Oracledb): Promise<void> {
 }
 
 /**
- * Creates options for an IndexedDB-backed local cache.
+ * Creates options for browser-backed persistent local storage.
  *
- * @param {PersistentLocalCacheOptions} [options] - Optional cache-size and tab-synchronization settings.
- * @returns {OfflineOptions} Options that can be passed to {@link enableOffline}.
+ * @param options - Optional cache-size and tab-synchronization settings.
+ * @returns Offline options that enable persistent local storage.
  * @example
  * ```ts
- * await enableOffline(db, persistentLocalCache({ synchronizeTabs: true }));
+ * const options = persistentLocalCache({ synchronizeTabs: true });
  * ```
  */
 export function persistentLocalCache(options: PersistentLocalCacheOptions = {}): OfflineOptions {
@@ -911,13 +960,13 @@ export function persistentLocalCache(options: PersistentLocalCacheOptions = {}):
 }
 
 /**
- * Removes all locally persisted IndexedDB data for an OracleDB instance.
+ * Clears browser-backed persistent storage for a document-data service.
  *
- * @param {Oracledb} db - The OracleDB instance whose persisted data is removed.
- * @returns {Promise<void>} A promise that resolves after the persisted data is cleared.
+ * @param db - Service whose persistent data is cleared.
+ * @returns A promise that resolves after storage is cleared.
  * @example
  * ```ts
- * await clearIndexedDbPersistence(db);
+ * await clearIndexedDbPersistence(database);
  * ```
  */
 export async function clearIndexedDbPersistence(db: Oracledb): Promise<void> {
@@ -926,19 +975,18 @@ export async function clearIndexedDbPersistence(db: Oracledb): Promise<void> {
     await state.persistence.clear();
     return;
   }
-  const databaseName = `${db.app.options.appID ?? db.app.name}-oracledb-offline`;
+  const databaseName = offlinePersistenceDatabaseName(db);
   await new OfflineIndexedDbPersistence(databaseName).clear();
 }
 
 /**
- * Resumes remote reads, listener synchronization, and queued-write delivery
- * after network access was disabled.
+ * Enables network access for a document-data service.
  *
- * @param {Oracledb} db - The offline-enabled OracleDB instance to resume.
- * @returns {Promise<void>} A promise that resolves after synchronization is resumed.
+ * @param db - Service whose network access is enabled.
+ * @returns A promise that resolves when network access resumes.
  * @example
  * ```ts
- * await enableNetwork(db);
+ * await enableNetwork(database);
  * ```
  */
 export async function enableNetwork(db: Oracledb): Promise<void> {
@@ -949,6 +997,7 @@ export async function enableNetwork(db: Oracledb): Promise<void> {
 async function resumeNetworkForState(state: OfflineState, db: Oracledb): Promise<void> {
   state.networkEnabled = true;
   state.tabCoordinator.setNetworkEnabled(true);
+  await syncCurrentUserForActiveTargets(state, db);
   await refreshPersistenceFromStorage(state);
   state.onlineStateTracker.set(state.connectivityTracker.state === 'offline' ? 'offline' : 'unknown');
   if (canUseNetwork(state)) {
@@ -960,15 +1009,13 @@ async function resumeNetworkForState(state: OfflineState, db: Oracledb): Promise
 }
 
 /**
- * Suspends remote reads, listener synchronization, and queued-write delivery
- * while retaining access to locally cached data.
+ * Disables network access for a document-data service.
  *
- * @param {Oracledb} db - The offline-enabled OracleDB instance to pause.
- * @returns {Promise<void>} A promise that resolves after network activity is paused.
+ * @param db - Service whose network access is disabled.
+ * @returns A promise that resolves when network access pauses.
  * @example
  * ```ts
- * await disableNetwork(db);
- * const snapshot = await getDocFromCache(doc(db, "tasks", "task-1"));
+ * await disableNetwork(database);
  * ```
  */
 export async function disableNetwork(db: Oracledb): Promise<void> {
@@ -988,35 +1035,30 @@ async function pauseNetworkForState(state: OfflineState, db: Oracledb): Promise<
 }
 
 /**
- * Reads one document exclusively from the enabled local cache.
+ * Reads a document snapshot from the local cache.
  *
- * @template AppModelType - The application model type of the document.
- * @param {DocumentReference<AppModelType>} ref - The document reference to read.
- * @returns {Promise<DocumentSnapshot<AppModelType>>} A promise containing the cached document snapshot.
+ * @param ref - Document reference to read.
+ * @returns A promise that resolves to the cached document snapshot.
  * @example
  * ```ts
- * const snapshot = await getDocFromCache(doc(db, "tasks", "task-1"));
- * if (snapshot.exists()) console.log(snapshot.data());
+ * const snapshot = await getDocFromCache(taskRef);
  * ```
  */
 export function getDocFromCache<AppModelType>(
-  ref: DocumentReference<AppModelType>
+  ref: DocumentReference<AppModelType> | DualityViewDocReference<AppModelType>
 ): Promise<DocumentSnapshot<AppModelType>> {
   const db = getDbFromRefOrQuery(ref);
   return getOfflineState(db).syncCoordinator.getDocument(ref, 'cache');
 }
 
 /**
- * Reads documents for a query or collection exclusively from the enabled local cache.
+ * Reads a query snapshot from the local cache.
  *
- * @template AppModelType - The application model type of the returned documents.
- * @template DbModelType - The stored model type of the returned documents.
- * @param {Query<AppModelType, DbModelType> | CollectionReference<AppModelType, DbModelType> | DualityViewColReference<AppModelType>} query - The query or collection to read.
- * @returns {Promise<QuerySnapshot<AppModelType, DbModelType>>} A promise containing the cached query snapshot.
+ * @param query - Query or collection to read.
+ * @returns A promise that resolves to the cached query snapshot.
  * @example
  * ```ts
- * const snapshot = await getDocsFromCache(collection(db, "tasks"));
- * console.log(snapshot.docs.map(item => item.data()));
+ * const snapshot = await getDocsFromCache(tasksQuery);
  * ```
  */
 export function getDocsFromCache<AppModelType, DbModelType>(
@@ -1095,7 +1137,7 @@ function cachedDocumentFromSnapshot(
   };
 }
 
-export async function _ensureDocumentCachedForWrite(ref: DocumentReference<any, any>): Promise<void> {
+export async function _ensureDocumentCachedForWrite(ref: DocumentReference<any, any> | DualityViewDocReference<any, any>): Promise<void> {
   const state = maybeGetOfflineState(ref.oracledb);
   if (!state) return;
   const key = OracledbDocumentKey.fromPath(ref.path);
@@ -1143,11 +1185,10 @@ function documentExistsInLocalView(
   );
 }
 
-function buildQueryTarget(
-  target: Query<any, any> | CollectionReference<any, any> | DocumentReference<any, any>
+function buildQueryTarget(target: SnapshotTarget
 ) {
   const canonicalId = canonicalIdForTarget(target);
-  if (target instanceof DocumentReference) {
+  if (target instanceof DocumentReference || target instanceof DualityViewDocReference) {
     return {
       canonicalQuery: canonicalId,
       canonicalId,
@@ -1156,6 +1197,8 @@ function buildQueryTarget(
       filters: [],
       orderBy: [],
       limit: null,
+      column: [],
+      referenceType: target instanceof DualityViewDocReference ? 'dualityViewDocument' as const : 'document' as const,
     };
   }
   const queryLike = target as any;
@@ -1167,6 +1210,8 @@ function buildQueryTarget(
     filters: queryLike._conditions ?? [],
     orderBy: queryLike._explicitOrder ?? [],
     limit: queryLike._limit ?? null,
+    column: queryLike._column ?? [],
+    referenceType: target instanceof DualityViewColReference ? 'dualityViewCollection' as const : 'collection' as const,
   };
 }
 
@@ -1188,7 +1233,7 @@ function attachRemoteListener(state: OfflineState, targetId: number): void {
   clearRemoteListenerRetry(active);
   state.onlineStateTracker.handleRemoteAttemptStart();
   active.remoteUnsubscribe = state.remoteWatch.listen(
-    active.target,
+    active.target as any,
     storedTarget,
     {
       nextSnapshot: (snapshot: DocumentSnapshot<any, any> | QuerySnapshot<any, any>) => {
@@ -1206,6 +1251,14 @@ function attachRemoteListener(state: OfflineState, targetId: number): void {
         const remoteUnsubscribe = active.remoteUnsubscribe;
         active.remoteUnsubscribe = undefined;
         remoteUnsubscribe();
+        if (_error instanceof OfflineRealtimeUnavailableError) {
+          clearRemoteListenerRetry(active);
+          state.activeTargetRefs.delete(targetId);
+          state.sharedClientState.removeLocalQueryTarget(targetId);
+          state.localStore.deactivateTarget(targetId).catch(() => undefined);
+          state.eventHub.failTarget(active.target as any, _error);
+          return;
+        }
         state.onlineStateTracker.handleRemoteFailure();
         scheduleRemoteListenerRetry(state, targetId);
       },
@@ -1582,24 +1635,31 @@ function buildSharedTargetDescriptor(
     targetId: target.targetId,
     userId: target.userId ?? 'anonymous',
     targetType: target.targetType,
+    referenceType: target.referenceType,
     canonicalId: target.canonicalId ?? target.canonicalQuery,
     canonicalQuery: target.canonicalQuery,
     path: target.path ?? (Array.isArray(sourceLike._path) ? sourceLike._path.join('/') : undefined),
     filters: target.filters ?? sourceLike._conditions ?? [],
     orderBy: target.orderBy ?? sourceLike._explicitOrder ?? [],
     limit: target.limit ?? sourceLike._limit ?? null,
+    column: target.column ?? sourceLike._column ?? [],
   };
 }
 
 function rebuildTargetFromSharedDescriptor(db: Oracledb, descriptor: OfflineSharedTargetDescriptor): SnapshotTarget {
   if (descriptor.targetType === 'document') {
-    return new DocumentReference(db, descriptor.path);
+    return descriptor.referenceType === 'dualityViewDocument'
+      ? new DualityViewDocReference(db, descriptor.path ?? '')
+      : new DocumentReference(db, descriptor.path ?? '');
   }
-  const query = new Query(db);
+  const query = descriptor.referenceType === 'dualityViewCollection'
+    ? new DualityViewColReference(db, descriptor.path ?? '')
+    : new Query(db);
   (query as any)._path = descriptor.path ? descriptor.path.split('/').filter(Boolean) : [];
   (query as any)._conditions = descriptor.filters ?? [];
   (query as any)._explicitOrder = descriptor.orderBy ?? [];
   (query as any)._limit = descriptor.limit ?? 0;
+  (query as any)._column = descriptor.column ?? [];
   return query;
 }
 
@@ -1610,8 +1670,8 @@ function assertValidListenSource(options: ListenOptions): void {
   throw new Error(`Unsupported snapshot listen source ${String(options.source)}`);
 }
 
-function isCompleteCollectionTarget(target: Query<any, any> | CollectionReference<any, any> | DocumentReference<any, any>): boolean {
-  if (target instanceof DocumentReference) return true;
+function isCompleteCollectionTarget(target: SnapshotTarget): boolean {
+  if (target instanceof DocumentReference || target instanceof DualityViewDocReference) return true;
   const queryLike = target as any;
   return (queryLike._conditions?.length ?? 0) === 0 &&
     (queryLike._limit ?? 0) === 0 &&

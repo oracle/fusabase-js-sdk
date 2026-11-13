@@ -25,14 +25,20 @@
 //-----------------------------------------------------------------------------
 // 
 
+
 import { DocumentData } from '../types/common.js';
 import { OracledbDocumentKey, OracledbDocumentVersion, OfflineWriteBatch, OracledbSnapshotVersion } from '../model/index.js';
 
+/** Describes the public `PersistenceKind` value. */
 export type PersistenceKind = 'indexeddb' | 'memory';
 
+/** Describes the public `OfflineOptions` value. */
 export type OfflineOptions = {
+/** Describes the public `persistence` value. */
   persistence?: PersistenceKind;
+/** Describes the public `synchronizeTabs` value. */
   synchronizeTabs?: boolean;
+/** Describes the public `cacheSizeBytes` value. */
   cacheSizeBytes?: number;
 };
 
@@ -54,11 +60,13 @@ export type OfflineQueryTarget = {
   canonicalQuery: string;
   canonicalId?: string;
   targetType?: 'document' | 'query';
+  referenceType?: 'document' | 'dualityViewDocument' | 'collection' | 'dualityViewCollection';
   path?: string;
   userId?: string;
   filters?: Array<{ field: string | null; op: string; value: unknown }>;
   orderBy?: Array<{ field: string; direction: 'asc' | 'desc' }>;
   limit?: number | null;
+  column?: string[];
   snapshotVersion?: OracledbSnapshotVersion;
   isActive?: boolean;
 };
@@ -120,6 +128,7 @@ export interface OfflinePersistence {
   nextBatchId: number;
   nextSequenceNumber: number;
   cacheSizeBytes?: number;
+  allocateBatchId?(): Promise<number>;
   setRemoteDocument?(document: OfflineCachedDocument): Promise<void>;
   removeRemoteDocument?(key: OracledbDocumentKey): Promise<void>;
   setDocument?(document: OfflineCachedDocument): Promise<void>;

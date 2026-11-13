@@ -1,19 +1,29 @@
 {
   "name": "@fusabase/storage",
-  "version": "26.3.0",
+  "version": "26.3.1",
   "type": "module",
-  "description": "Oracle® Backend with Firebase APIs Storage package",
-  "main": "./src/index.js",
+  "description": "Oracle Backend for Firebase Storage package",
+  "main": "./dist/index.js",
   "exports": {
     ".": {
-      "types": "./src/index.d.ts",
-      "import": "./src/index.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*",
+      "import": "./dist/*"
     }
   },
   "peerDependencies": {
-    "@fusabase/app": "26.3.0"
+    "@fusabase/app": "26.3.1"
   },
   "dependencies": {
+    "@fusabase/logger": "26.3.1",
     "tslib": "^2.8.1"
-  }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

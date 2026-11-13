@@ -32,10 +32,15 @@ import { argCheck, oracledbErrorHandler } from "../util/utils.js";
 import { typeStrings } from "../util/utils.js";
 
 const FAILED_REQUEST_SNAPSHOT = Symbol("fusabase.failedRequestSnapshot");
+const FAILED_REQUEST_ERROR = Symbol("fusabase.failedRequestError");
 
 /** @internal */
-export function markQuerySnapshotAsFailedRequest<T extends QuerySnapshot<any, any>>(snapshot: T): T {
+export function markQuerySnapshotAsFailedRequest<T extends QuerySnapshot<any, any>>(
+  snapshot: T,
+  error?: unknown
+): T {
   Object.defineProperty(snapshot, FAILED_REQUEST_SNAPSHOT, { value: true });
+  Object.defineProperty(snapshot, FAILED_REQUEST_ERROR, { value: error });
   return snapshot;
 }
 
@@ -44,12 +49,43 @@ export function isQuerySnapshotFromFailedRequest(snapshot: QuerySnapshot<any, an
   return (snapshot as any)[FAILED_REQUEST_SNAPSHOT] === true;
 }
 
+/** @internal */
+export function getFailedQuerySnapshotError(snapshot: QuerySnapshot<any, any>): Error {
+  const error = (snapshot as any)[FAILED_REQUEST_ERROR];
+  return error instanceof Error ? error : new Error("Failed to fetch query snapshot");
+}
+
+/**
+ * Represents the documents returned by a query.
+ *
+ * @example
+ * ```ts
+ * const snapshot = await getDocs(tasksQuery);
+ * ```
+ */
 export class QuerySnapshot<AppModelType = DocumentData, DbModelType extends DocumentData = DocumentData> {
   /** @internal */  _docs: 	Array<QueryDocumentSnapshot<AppModelType, DbModelType>>;
   /** @internal */  _docChanges?: Array<DocumentChange<AppModelType, DbModelType>>;
+/** Describes the public `query` value. */
   public readonly query: any; // Replace with your Query class if available
+/** Describes the public `metadata` value. */
   public readonly metadata: SnapshotMetadata;
 
+/**
+ * Constructs a QuerySnapshot instance with the supplied configuration.
+ *
+ * @param snaps - The snaps accepted by this operation.
+ * @param query - The query whose results are requested.
+ * @param metadata - The metadata accepted by this operation.
+ * @param docChanges - The docChanges accepted by this operation.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { QuerySnapshot } from "fusabase/oracledb";
+ * const result = new QuerySnapshot(value, value, { title: "Example" }, value);
+ * void result;
+ * ```
+ */
   constructor(
     snaps: Array<DocumentSnapshot<any, any>>,
     query: any,
@@ -77,15 +113,35 @@ export class QuerySnapshot<AppModelType = DocumentData, DbModelType extends Docu
     return this._docs.length === 0;
   }
 
-  /**
-   * Iterates over each document in the snapshot.
-   * @param callback - Function called for each document.
-   */
+/**
+ * Executes the forEach operation for this public SDK type.
+ *
+ * @param callback - The callback invoked when the operation produces a result.
+ * @returns The result produced by `forEach`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { QuerySnapshot } from "fusabase/oracledb";
+ * const result = client.forEach(value);
+ * void result;
+ * ```
+ */
   forEach(callback: (doc: DocumentSnapshot<AppModelType, DbModelType>) => void): void {
     argCheck(callback, "Invalid callback", true, [typeStrings.FUNCTION]);
     this._docs.forEach(callback);
   }
 
+/**
+ * Executes the docChanges operation for this public SDK type.
+ *
+ * @param options - Optional settings that change this operation.
+ * @returns The result produced by `docChanges`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { QuerySnapshot } from "fusabase/oracledb";
+ * const result = client.docChanges(value);
+ * void result;
+ * ```
+ */
   docChanges(options?: any): Array<DocumentChange<AppModelType, DbModelType>> {
     if (this._docChanges) {
       return [...this._docChanges];
@@ -102,6 +158,18 @@ export class QuerySnapshot<AppModelType = DocumentData, DbModelType extends Docu
     return docsChanged;
   }
 
+/**
+ * Executes the isEqual operation for this public SDK type.
+ *
+ * @param snap - The snap accepted by this operation.
+ * @returns The result produced by `isEqual`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { QuerySnapshot } from "fusabase/oracledb";
+ * const result = client.isEqual(value);
+ * void result;
+ * ```
+ */
   isEqual(snap: QuerySnapshot<AppModelType, DbModelType>): boolean {
     if (!(snap instanceof QuerySnapshot)) {
       const error = new Error("The other instance to be compared should be an instance of QuerySnapshot") as Error & { status?: number };

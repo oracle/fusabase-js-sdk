@@ -60,6 +60,9 @@ class SnapshotStorage {
   async get(id: string): Promise<any> {
     const oracleDB = this.oracledb;
     let result = await this.iDBStore.get(id);
+    if (result.owner !== oracleDB.__snapshotOwner()) {
+      throw new Error('Snapshot cache owner mismatch');
+    }
     let ref: any = null;
     let snaps: QueryDocumentSnapshot[] = [];
     let docChanges: any[] = [];
@@ -125,7 +128,11 @@ class SnapshotStorage {
     ) {
       throw new Error(getErrorMessage('cannotSetNullEntry'));
     }
-    const preparedObj = { ...obj, snap: obj.snap._jsonObject() };
+    const preparedObj = {
+      ...obj,
+      owner: this.oracledb.__snapshotOwner(),
+      snap: obj.snap._jsonObject()
+    };
     await this.iDBStore.set(preparedObj);
   }
 

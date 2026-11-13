@@ -30,7 +30,7 @@ export type { ConnectivityListener, ConnectivityState } from './offline_connecti
 export { OfflineOnlineStateTracker } from './offline_online_state_tracker.js';
 export type { OfflineOnlineState, OfflineOnlineStateHandler } from './offline_online_state_tracker.js';
 export { OfflineOracledbSerializer } from './offline_serializer.js';
-export { OfflineRemoteWatch } from './offline_remote_watch.js';
+export { OfflineRemoteWatch, OfflineRealtimeUnavailableError } from './offline_remote_watch.js';
 export type { OfflineRemoteWatchDocumentChange } from './offline_remote_watch.js';
 export { OfflineRemoteStore } from './offline_remote_store.js';
 export { OfflineSharedClientState } from './offline_shared_client_state.js';

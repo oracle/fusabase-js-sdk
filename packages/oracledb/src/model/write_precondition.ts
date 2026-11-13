@@ -25,13 +25,38 @@
 //-----------------------------------------------------------------------------
 // 
 
+/** Represents a condition required before a write is applied. @example `const condition = OracledbWritePrecondition.none();` */
 export class OracledbWritePrecondition {
+  /** Whether the target document must exist before the write is applied. */
   private constructor(readonly exists?: boolean) {}
 
+/**
+ * Executes the none operation for this public SDK type.
+ *
+ * @returns The result produced by `none`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { OracledbWritePrecondition } from "fusabase/oracledb";
+ * const result = OracledbWritePrecondition.none();
+ * void result;
+ * ```
+ */
   static none(): OracledbWritePrecondition {
     return new OracledbWritePrecondition();
   }
 
+/**
+ * Executes the exists operation for this public SDK type.
+ *
+ * @param exists - The exists accepted by this operation.
+ * @returns The result produced by `exists`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { OracledbWritePrecondition } from "fusabase/oracledb";
+ * const result = OracledbWritePrecondition.exists(value);
+ * void result;
+ * ```
+ */
   static exists(exists: boolean): OracledbWritePrecondition {
     return new OracledbWritePrecondition(exists);
   }

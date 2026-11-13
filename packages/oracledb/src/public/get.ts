@@ -48,13 +48,21 @@ import {
 } from "./offline.js";
 
 /**
- * Reads all results for a query directly from the remote service.
+ * Reads all matching documents directly from the service.
  *
- * @param q - The query or collection to read.
- * @returns A promise resolving to a query snapshot.
+ * @param q - Query or collection to read.
+ * @returns A promise that resolves to the matching query snapshot.
  * @example
  * ```ts
- * const snapshot = await getDocsFromServer(users);
+ * const snapshot = await getDocsFromServer(tasksQuery);
+ * ```
+ * @example
+ * ```ts
+ * const snapshot = await getDocsFromServer(tasks);
+ * ```
+ * @example
+ * ```ts
+ * const snapshot = await getDocsFromServer(ordersView);
  * ```
  */
 export async function getDocsFromServer<
@@ -83,12 +91,22 @@ export async function getDocsFromServer<
  * Retrieves all documents matching the provided query.
  * Resolves with a QuerySnapshot containing the documents.
  *
- * @param q - The Oracledb query to execute.
- * @returns Promise<QuerySnapshot> - Contains all documents matching the query.
+ * @param q - A query, collection, or duality-view collection to execute.
+ * @returns A snapshot containing all matching documents.
  *
  * @example
- * const querySnap = await getDocs(userQuery);
+ * const querySnap = await getDocs(tasksQuery);
  * querySnap.forEach(doc => console.log(doc.id, doc.data()));
+ *
+ * @example
+ * ```ts
+ * const querySnap = await getDocs(tasks);
+ * ```
+ *
+ * @example
+ * ```ts
+ * const querySnap = await getDocs(ordersView);
+ * ```
  */
 export async function getDocs<AppModelType, DbModelType extends DocumentData>(
   q:
@@ -125,15 +143,26 @@ export async function getDocs<AppModelType, DbModelType extends DocumentData>(
 
 
 /**
- * Retrieves a single document referenced by the provided DocumentReference or string path.
+ * Retrieves a document from a document reference, duality-view document
+ * reference, or string path on the default database.
  * Resolves with a DocumentSnapshot containing the document data.
  *
- * @param ref - DocumentReference or string path
- * @returns Promise<DocumentSnapshot> - Contains the document data, if exists
+ * @param ref - Document or duality-view document reference, or a document path.
+ * @returns A snapshot containing the document data, if it exists.
  *
  * @example
  * const userSnap = await getDoc(userRef);
  * console.log(userSnap.id, userSnap.data());
+ *
+ * @example
+ * ```ts
+ * const orderSnap = await getDoc(orderViewRef);
+ * ```
+ *
+ * @example
+ * ```ts
+ * const userSnap = await getDoc("users/user-1");
+ * ```
  */
 export async function getDoc<
   AppModelType,
@@ -149,21 +178,21 @@ export async function getDoc<
     error.status = 400;
     throw oracledbErrorHandler(error);
   }
-  if (ref instanceof DocumentReference && _shouldReadFromCache(ref.oracledb)) {
+  if ((ref instanceof DocumentReference || ref instanceof DualityViewDocReference) && _shouldReadFromCache(ref.oracledb)) {
     const cached = _getDocFromCacheIfEnabled(ref);
     if (cached) return cached as Promise<DocumentSnapshot<AppModelType, DbModelType>>;
   }
   try {
     const snap = await ref.get() as any;
     await _cacheDocumentSnapshot(snap);
-    if (ref instanceof DocumentReference && await _hasPendingWritesForDocument(ref)) {
+    if ((ref instanceof DocumentReference || ref instanceof DualityViewDocReference) && await _hasPendingWritesForDocument(ref as any)) {
       const cached = _getDocFromCacheIfEnabled(ref);
       if (cached) return cached as Promise<DocumentSnapshot<AppModelType, DbModelType>>;
     }
     return snap;
   } catch (error) {
-    if (ref instanceof DocumentReference) {
-      const cached = _getDocFromCacheIfEnabled(ref);
+    if (ref instanceof DocumentReference || ref instanceof DualityViewDocReference) {
+      const cached = _getDocFromCacheIfEnabled(ref as any);
       if (cached) return cached as Promise<DocumentSnapshot<AppModelType, DbModelType>>;
     }
     throw error;
@@ -177,7 +206,7 @@ export async function getDoc<
  * @returns Promise<DocumentSnapshot>
  * @example
  * ```ts
- * const snapshot = await getDocFromServer(profile);
+ * const snapshot = await getDocFromServer(taskRef);
  * ```
  */
 export async function getDocFromServer<
@@ -205,7 +234,7 @@ export async function getDocFromServer<
  * @returns AggregateQuerySnapshot with results of the aggregation
  * @example
  * ```ts
- * const snapshot = await getAggregateFromServer(orders, { total: sum('amount') });
+ * const snapshot = await getAggregateFromServer(tasksQuery, { total: count() });
  * ```
  */
 export async function getAggregateFromServer<
@@ -241,8 +270,7 @@ export async function getAggregateFromServer<
  * @returns Promise with AggregateQuerySnapshot containing the count.
  * @example
  * ```ts
- * const snapshot = await getCountFromServer(users);
- * console.log(snapshot.data().count);
+ * const snapshot = await getCountFromServer(tasksQuery);
  * ```
  */
 export async function getCountFromServer<

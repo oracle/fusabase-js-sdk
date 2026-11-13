@@ -34,9 +34,15 @@ export function registerOracledb(): void {
       "oracledb",
       container => {
         const app = container.getProvider("app").getImmediate();
+        if ((app as any)?.options?.backendType === "relational") {
+          const error = new Error("getOracledb() is only available when the backend is 'collection'") as Error & { status?: number };
+          error.status = 400;
+          throw error;
+        }
         return new Oracledb(app as any);
       },
-      "PUBLIC"
-    ).setMultipleInstances(true)
+      "PUBLIC",
+      db => db._delete()
+    )
   );
 }

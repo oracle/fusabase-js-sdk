@@ -26,7 +26,7 @@
 
 import { DocumentData } from '../types/common.js';
 import { oracledbErrorHandler,checkOracledbApiVersion,OracledbVersion,typeStrings,Utils,argCheck,getAccessToken,getToken, snapHashcode, rearrangeBodyOfVersion2 } from '../util/utils.js';
-import { parseTimestamp,updateNestedData,setWholeData,createPayloadForUpdateVersion2New,extractCallbacksForSnapshot} from '../util/utils_helper.js';
+import { parseTimestamp,updateNestedData,setWholeData,createPayloadForUpdateVersion2New,extractCallbacksForSnapshot,safeSetOwn} from '../util/utils_helper.js';
 import { updateFieldsWithQuotes ,isInstanceOfAnyClass,createUniqueName } from '../util/utils.js';
 import { CollectionReference } from '../collection/reference.js';
 import { OracledbDataConverter } from '../types/converter.js';
@@ -144,7 +144,7 @@ export class BulkUpdate <
       for (let i = 0; i < args.length - 1; i++) {
         let temp = args[i];
         if (temp instanceof FieldPath) temp = temp.fullPathSec;
-        data_obj[temp] = args[i + 1];
+        safeSetOwn(data_obj, temp, args[i + 1]);
       }
     } else if (args.length === 2 && typeof args[0] === 'object') {
       data_obj = args[0];
@@ -157,7 +157,7 @@ export class BulkUpdate <
     const access_token = await getAccessToken(this.oracledb.app);
     try {
       await this._queryHelper!.updateDocument(
-        this as any, data, access_token ?? undefined, trans_obj);
+        this as any, data, access_token ?? undefined, trans_obj, this._conditions);
     } catch (err) {
       Utils.baasTrace(this.oracledb.app.logLevel);
       throw oracledbErrorHandler(err);

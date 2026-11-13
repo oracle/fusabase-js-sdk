@@ -25,9 +25,13 @@
 //-----------------------------------------------------------------------------
 // 
 
-import { QuerySnapshot } from '../collection/snapshot.js';
-import { CollectionReference, Query } from '../collection/reference.js';
-import { DocumentReference } from '../document/reference.js';
+import {
+  getFailedQuerySnapshotError,
+  isQuerySnapshotFromFailedRequest,
+  QuerySnapshot,
+} from '../collection/snapshot.js';
+import { CollectionReference, DualityViewColReference, Query } from '../collection/reference.js';
+import { DocumentReference, DualityViewDocReference } from '../document/reference.js';
 import { DocumentSnapshot } from '../document/snapshot.js';
 import { OracledbDocumentKey } from '../model/index.js';
 import { ListenObserver, ListenOptions, Unsubscribe } from './offline_sync_coordinator.js';
@@ -35,7 +39,9 @@ import { ListenObserver, ListenOptions, Unsubscribe } from './offline_sync_coord
 type ListenTarget<AppModelType = any> =
   | Query<AppModelType, any>
   | CollectionReference<AppModelType, any>
-  | DocumentReference<AppModelType, any>;
+  | DualityViewColReference<AppModelType, any>
+  | DocumentReference<AppModelType, any>
+  | DualityViewDocReference<AppModelType, any>;
 
 type SnapshotForTarget =
   | QuerySnapshot<any, any>
@@ -95,9 +101,26 @@ export class OfflineEventHub {
     return false;
   }
 
+  /** Ends all local observers for a target after a terminal remote error. */
+  failTarget(target: ListenTarget, error: Error): void {
+    for (const listener of [...this.listeners]) {
+      if (listener.target !== target) continue;
+      this.listeners.delete(listener);
+      try {
+        listener.observer.error?.(error);
+      } catch {
+        // User callback errors must not prevent other observers from ending.
+      }
+    }
+  }
+
   private async emitListener(listener: ListenerRegistration): Promise<void> {
     const previous = listener.lastSnapshot;
     const snapshot = await this.readSnapshot(listener.target, listener.options);
+    if (snapshot instanceof QuerySnapshot && isQuerySnapshotFromFailedRequest(snapshot)) {
+      listener.observer.error?.(getFailedQuerySnapshotError(snapshot));
+      return;
+    }
     if (snapshot instanceof QuerySnapshot) {
       snapshot._docChanges = this.queryDocChanges(
         previous instanceof QuerySnapshot ? previous : undefined,
@@ -172,7 +195,7 @@ export class OfflineEventHub {
   }
 
   private isAffected(target: ListenTarget, affectedKeys: OracledbDocumentKey[]): boolean {
-    if (target instanceof DocumentReference) {
+    if (target instanceof DocumentReference || target instanceof DualityViewDocReference) {
       return affectedKeys.some(key => key.path === target.path);
     }
     const targetPath = Array.isArray((target as any)._path) ? (target as any)._path.join('/') : '';

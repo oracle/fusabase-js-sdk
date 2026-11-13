@@ -35,16 +35,9 @@ import type { ListOptions } from "./types.js";
  * @param ref - The StorageReference to list items from.
  * @param options - Options for the list operation, such as maxResults and pageToken.
  * @returns {Promise<ListResult>} A promise that resolves with the list result.
- */
-/**
- * Lists objects and prefixes directly under a storage reference.
- *
- * @param ref - The reference whose children to list.
- * @param options - Optional page size and continuation-token settings.
- * @returns A promise resolving to one page of list results.
  * @example
  * ```ts
- * const page = await list(ref(storage, 'images'), { maxResults: 20 });
+ * const result = await list(fileRef, { maxResults: 25 });
  * ```
  */
 export async function list(ref: StorageReference, options?: ListOptions): Promise<ListResult> {
@@ -60,15 +53,9 @@ export async function list(ref: StorageReference, options?: ListOptions): Promis
  * Lists all files and directories recursively at the given reference.
  * @param ref - The StorageReference to list all items from.
  * @returns {Promise<ListResult>} A promise that resolves with the list result.
- */
-/**
- * Lists all objects and prefixes below a storage reference.
- *
- * @param ref - The reference whose descendants to list.
- * @returns A promise resolving to the complete list result.
  * @example
  * ```ts
- * const result = await listAll(ref(storage, 'images'));
+ * const result = await listAll(fileRef);
  * ```
  */
 export async function listAll(ref: StorageReference): Promise<ListResult> {

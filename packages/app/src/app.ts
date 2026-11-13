@@ -23,49 +23,102 @@
 // limitations under the License.
 //
 //-----------------------------------------------------------------------------
-// 
+//
 
 import fusabase from "./fusabase-internal.js";
 import { App } from "./public-types.js";
 import {LogLevel} from "../../logger/LogLevel.js";
-import { FusabaseOptions } from "./public-types.js"; // your existing options interface
+import { BackendType, FusabaseConfig } from "./public-types.js";
 
 /**
- * Initializes and registers an application instance.
+ * Initializes an application with the supplied configuration.
  *
- * @param options - The application configuration.
- * @param name - An optional instance name; defaults to the primary instance.
- * @returns The initialized application instance.
+ * @param {FusabaseConfig} options - Console configuration. Required fields are
+ * `ords_host`, `schema`, `app_type`, `app_id`, `project_id`, `objs_type`,
+ * `storage_bucket`, `auth_type`, `auth_id`, and `backend_type`. Optional fields
+ * are `app_name`, `use_socket`, `long_polling_interval`, `upload_chunk_size`,
+ * and `max_upload_bytes`.
+ * @param {string} [name] - Unique local app name. Defaults to `"[DEFAULT]"`.
+ * @param {BackendType | null} [backendType] - Optional backend family. Use
+ * `COLLECTION` or `RELATIONAL`; when omitted, the collection backend is used.
+ * @returns {App} The initialized application instance.
+ * @throws {FusabaseError} If the configuration is missing or invalid.
  * @example
  * ```ts
- * const app = initializeApp({ projectId: 'my-project', appId: 'my-app' });
+ * const app = initializeApp({
+ *   ords_host: "https://example.com/ords/USER1/",
+ *   schema: "user1",
+ *   app_name: "TodoApp",
+ *   app_type: "WEB",
+ *   app_id: "app-id",
+ *   project_id: "project-id",
+ *   objs_type: "dbfs",
+ *   storage_bucket: "bucket-name",
+ *   auth_type: "base",
+ *   auth_id: "auth-id",
+ *   backend_type: "COLLECTION",
+ * });
+ * ```
+ *
+ * @example Initialize a named relational app.
+ * ```ts
+ * const app = initializeApp(config, "reporting", "RELATIONAL");
+ * ```
+ *
+ * @example Initialize a named collection app.
+ * ```ts
+ * const app = initializeApp(config, "primary", "COLLECTION");
  * ```
  */
-export function initializeApp(options: FusabaseOptions | null, name?: string): App {
+export function initializeApp(
+  options: FusabaseConfig | null,
+  name?: string,
+  backendType?: BackendType | null
+): App {
   if (options == null) {
     const err = new Error("Incorrect config provided!") as Error & { status?: number };
     err.status = 400;
     throw fusabase.appErrorHandler(err);
   }
 
-  if (name == null) {
-    name = "[DEFAULT]";
-  } else if (typeof name === "object") {
-    // If name was mistakenly passed as an object, assume it has a .name
-    name = (name as { name?: string }).name ?? "[DEFAULT]";
+  const configuredBackend = options.backend_type;
+  if (configuredBackend != null && configuredBackend !== "COLLECTION" && configuredBackend !== "RELATIONAL") {
+    const err = new Error("backend_type must be COLLECTION or RELATIONAL") as Error & { status?: number };
+    err.status = 400;
+    throw fusabase.appErrorHandler(err);
+  }
+  if (configuredBackend === "RELATIONAL" && backendType !== "RELATIONAL") {
+    const err = new Error("RELATIONAL configuration must be initialized through the relational client API") as Error & { status?: number };
+    err.status = 400;
+    throw fusabase.appErrorHandler(err);
+  }
+  if (configuredBackend === "COLLECTION" && backendType === "RELATIONAL") {
+    const err = new Error("COLLECTION configuration cannot be initialized through the relational client API") as Error & { status?: number };
+    err.status = 400;
+    throw fusabase.appErrorHandler(err);
   }
 
-  return fusabase.initializeApp(options, name);
+  if (name == null) {
+    name = "[DEFAULT]";
+  }
+
+  return fusabase.initializeApp(options, name, backendType);
 }
 
 /**
- * Returns a previously initialized application instance.
+ * Gets an initialized application by name.
  *
- * @param name - The optional instance name; defaults to the primary instance.
+ * @param name - Optional application name.
  * @returns The matching application instance.
+ * @throws {FusabaseError} If no application with the requested name exists.
  * @example
  * ```ts
  * const app = getApp();
+ * ```
+ *
+ * @example Get a named app.
+ * ```ts
+ * const reportingApp = getApp("reporting");
  * ```
  */
 export function getApp(name?: string): App {
@@ -76,18 +129,18 @@ export function getApp(name?: string): App {
 }
 
 /**
- * Returns all initialized application instances.
+ * Gets all active application instances.
  *
- * @returns An array of application instances.
+ * @returns The active application instances.
  * @example
  * ```ts
- * console.log(getApps().map(app => app.name));
+ * const apps = getApps();
  * ```
  */
 export function getApps(): App[] {
   const apps: App[] = [];
   Object.entries(fusabase._apps).forEach(([_, value]) => {
-    if (value instanceof App) {
+    if (value instanceof App && !value.isDeleted) {
       apps.push(value);
     }
   });
@@ -95,10 +148,11 @@ export function getApps(): App[] {
 }
 
 /**
- * Deletes an application instance and releases its registered services.
+ * Deletes an application and releases its registered services.
  *
- * @param app - The application instance to delete.
- * @returns A promise resolving to `null` after deletion.
+ * @param app - Application instance to delete.
+ * @returns A promise that resolves to `null` after deletion.
+ * @throws {FusabaseError} If `app` is not a valid application instance or deletion fails.
  * @example
  * ```ts
  * await deleteApp(app);
@@ -111,17 +165,22 @@ export async function deleteApp(app: App): Promise<null> {
     throw fusabase.appErrorHandler(err);
   }
   await app.delete();
+  for (const [name, registeredApp] of Object.entries(fusabase._apps)) {
+    if (name !== "[DEFAULT]" && registeredApp === app) {
+      delete fusabase._apps[name];
+    }
+  }
   return null;
 }
 
 /**
- * Sets the log level for every initialized application.
+ * Sets the log level for every active application.
  *
- * @param logLevel - The level to apply.
+ * @param logLevel - Log level to apply.
  * @returns Nothing.
  * @example
  * ```ts
- * setLogLevel(LogLevel.WARN);
+ * setLogLevel(LogLevel.DEBUG);
  * ```
  */
 export function setLogLevel(logLevel: LogLevel): void {

@@ -1,0 +1,52 @@
+{
+  "name": "@fusabase/fusabase-collections",
+  "version": "26.3.1",
+  "type": "module",
+  "description": "Oracle Backend for Firebase collections SDK package",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./app": {
+      "types": "./dist/app.d.ts",
+      "import": "./dist/app.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "import": "./dist/auth.js"
+    },
+    "./db": {
+      "types": "./dist/db.d.ts",
+      "import": "./dist/db.js"
+    },
+    "./storage": {
+      "types": "./dist/storage.d.ts",
+      "import": "./dist/storage.js"
+    },
+    "./ui": {
+      "types": "./dist/ui.d.ts",
+      "import": "./dist/ui.js"
+    },
+    "./*": {
+      "types": "./dist/*",
+      "import": "./dist/*"
+    }
+  },
+  "peerDependencies": {
+    "@fusabase/app": "26.3.1"
+  },
+  "dependencies": {
+    "@fusabase/auth": "26.3.1",
+    "@fusabase/oracledb": "26.3.1",
+    "@fusabase/storage": "26.3.1",
+    "@fusabase/ui": "26.3.1",
+    "tslib": "^2.8.1"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}

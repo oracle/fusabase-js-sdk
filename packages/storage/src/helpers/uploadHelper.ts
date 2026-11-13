@@ -208,7 +208,6 @@ export class UploadTaskController {
         response = await fetchWithRetry(reqURL, params, this.storageHelper.maxUploadRetryTime, this.storageHelper?.app);
         Utils.checkResponse(response);
       } catch (err) {
-        Utils.baasTrace(this.logLevel, params, reqURL, response);
         throw storageErrorHandler(err);
       }
     }
@@ -373,7 +372,6 @@ export class UploadTaskController {
       if (this.isMultipart) {
         this.isMultipart.toSend--;
       }
-      Utils.baasTrace(this.logLevel, params, reqURL, response);
 
       let error = new StorageError(StorageErrorCode.INTERNAL_ERROR, err.message);
       if (err.status) {
@@ -572,8 +570,6 @@ if (response.headers && 'entries' in response.headers) {
           }
         }
       } catch (err: any) {
-        Utils.baasTrace(this.logLevel, params, reqURL, response);
-
         try {
           if (response && 'json' in response) {
             let errjson = await (response as any).json();

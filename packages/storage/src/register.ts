@@ -34,6 +34,11 @@ export function registerStorage(): void {
       "storage",
       container => {
         const app = container.getProvider("app").getImmediate();
+        if ((app as any)?.options?.backendType === "relational") {
+          const error = new Error("getStorage() is only available when the backend is 'collection'") as Error & { status?: number };
+          error.status = 400;
+          throw error;
+        }
         return new Storage(app as any);
       },
       "PUBLIC"

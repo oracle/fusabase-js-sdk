@@ -1,16 +1,20 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
+    "packages/logger/LogLevel.ts",
+    "packages/auth-core/src/index.ts",
     "packages/auth/src/index.ts",
     "packages/storage/src/index.ts",
     "packages/oracledb/src/index.ts",
     "packages/app/src/index.ts",
     "packages/app-trust/src/index.ts",
-    "packages/logger/LogLevel.ts",
+    "packages/relational/src/index.ts",
+    "packages/fusabase-relational/src/index.ts",
+    "packages/fusabase-collections/src/index.ts",
     "packages/ui/src/index.ts"
   ],
   "out": "docs/api-reference",
-  "name": "Oracle® Backend with Firebase APIs JavaScript Modular SDK Reference, Release 26.3.0",
+  "name": "Oracle® Backend with Firebase APIs JavaScript Modular SDK Reference, Release 26.3.1",
   "includeVersion": true,
   "excludePrivate": true,
   "excludeProtected": true,

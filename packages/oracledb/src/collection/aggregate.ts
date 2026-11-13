@@ -31,17 +31,28 @@ import { argCheck, typeStrings } from '../util/utils.js';
 import { Utils,oracledbErrorHandler,QueryHelper,getAccessToken } from '../util/utils.js';
 import { Query } from './reference.js';
 
+/** Represents an aggregate field specification. @example `const total = count();` */
 export class AggregateField<T = unknown> {
+/** Describes the public `type` value. */
   readonly type: string;
+/** Describes the public `aggregateType` value. */
   readonly aggregateType: AggregateType;
+/** Describes the public `field` value. */
   readonly field: string;
 
-  /**
-   * (Private) Creates a new `AggregateField` instance.
-   *
-   * @param field - Field name.
-   * @param op - Aggregate operation.
-   */
+/**
+ * Constructs a AggregateField instance with the supplied configuration.
+ *
+ * @param field - The field accepted by this operation.
+ * @param op - The op accepted by this operation.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { AggregateField } from "fusabase/oracledb";
+ * const result = new AggregateField(value, value);
+ * void result;
+ * ```
+ */
   constructor(field: string, op: AggregateType) {
     this.type = "AggregateField";
     this.aggregateType = op;
@@ -73,7 +84,7 @@ export class AggregateField<T = unknown> {
       field = field.fullPath;
     }
     argCheck(field, "Invalid field provided in AggregateField.", true, [typeStrings.STRING]);
-    return new AggregateField<T>(field, "average");
+    return new AggregateField<T>(field, "avg");
   }
 
   /**
@@ -105,10 +116,24 @@ export class AggregateField<T = unknown> {
 /**
  * AggregateQuery - Query class to store aggregate queries.
  */
+/** Represents a query that computes aggregate values. @example `const aggregate = tasks.count();` */
 export class AggregateQuery<AppModelType = DocumentData, DbModelType extends DocumentData = DocumentData> {
   #query: Query<AppModelType, DbModelType>;
   #queryHelper: QueryHelper;
 
+/**
+ * Constructs a AggregateQuery instance with the supplied configuration.
+ *
+ * @param q - The q accepted by this operation.
+ * @param obj - The obj accepted by this operation.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { AggregateQuery } from "fusabase/oracledb";
+ * const result = new AggregateQuery(value, value);
+ * void result;
+ * ```
+ */
   constructor(q: Query<AppModelType, DbModelType>, obj?: any) {
     this.#queryHelper = new QueryHelper(q.oracledb.app);
     this.#query = q;
@@ -126,13 +151,18 @@ export class AggregateQuery<AppModelType = DocumentData, DbModelType extends Doc
     return this.#query;
   }
 
-  /**
-   * Checks whether this `AggregateQuery` is equal to the provided one.
-   *
-   * @param {AggregateQuery} q Query that needs to be compared.
-   * @return {boolean} Returns true if both queries are the same.
-   * @throws {OracledbError} Throws an error if q is not a AggregateQuery instance.
-   */
+/**
+ * Executes the isEqual operation for this public SDK type.
+ *
+ * @param q - The q accepted by this operation.
+ * @returns The result produced by `isEqual`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { AggregateQuery } from "fusabase/oracledb";
+ * const result = client.isEqual(value);
+ * void result;
+ * ```
+ */
   isEqual(q: AggregateQuery): boolean {
     if (!(q instanceof AggregateQuery)) {
       const error: any = new Error(
@@ -170,24 +200,34 @@ export class AggregateQuery<AppModelType = DocumentData, DbModelType extends Doc
     }
 }
 
+/** Represents aggregate values returned by a query. @example `const snapshot = await aggregate.get();` */
 export class AggregateQuerySnapshot<
   AggregateSpecType extends AggregateSpec,
   AppModelType = DocumentData,
   DbModelType extends DocumentData = DocumentData
 > implements AggregateQuerySnapshot<AggregateSpecType, AppModelType, DbModelType>
 {
+/** Describes the public `query` value. */
   readonly query: Query<AppModelType, DbModelType>;
   private _data: {
     [K in keyof AggregateSpecType]: AggregateSpecType[K] extends AggregateSpec ? number : never;
   };
+/** Describes the public `type` value. */
   readonly type: string;
 
-  /**
-   * Creates a new `AggregateQuerySnapshot` instance.
-   *
-   * @param q - Underlying query.
-   * @param data - Data received after query execution.
-   */
+/**
+ * Constructs a AggregateQuerySnapshot instance with the supplied configuration.
+ *
+ * @param q - The q accepted by this operation.
+ * @param data - The document or request data to write.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { AggregateQuerySnapshot } from "fusabase/oracledb";
+ * const result = new AggregateQuerySnapshot(value, { title: "Example" });
+ * void result;
+ * ```
+ */
   constructor(
     q: Query<AppModelType, DbModelType>,
     data: {
@@ -199,23 +239,35 @@ export class AggregateQuerySnapshot<
     this.type = "AggregateQuerySnapshot";
   }
 
-  /**
-   * Returns the results of the aggregations performed over the underlying query.
-   * The keys of the returned object will match the keys of the AggregateSpec used to generate this snapshot.
-   */
+/**
+ * Executes the data operation for this public SDK type.
+ *
+ * @returns The result produced by `data`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { AggregateQuerySnapshot } from "fusabase/oracledb";
+ * const result = client.data();
+ * void result;
+ * ```
+ */
   data(): {
     [K in keyof AggregateSpecType]: AggregateSpecType[K] extends AggregateSpec ? number : never;
   } {
     return this._data;
   }
 
-  /**
-   * Checks whether this `AggregateQuerySnapshot` is equal to the provided one.
-   *
-   * @param snap Snapshot to compare from.
-   * @return Returns true if both snapshots are the same.
-   * @throws OracledbError if `snap` is not an AggregateQuerySnapshot instance.
-   */
+/**
+ * Executes the isEqual operation for this public SDK type.
+ *
+ * @param snap - The snap accepted by this operation.
+ * @returns The result produced by `isEqual`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { AggregateQuerySnapshot } from "fusabase/oracledb";
+ * const result = client.isEqual(value);
+ * void result;
+ * ```
+ */
   isEqual(
     snap: AggregateQuerySnapshot<AggregateSpecType, AppModelType, DbModelType>
   ): boolean {

@@ -1,16 +1,25 @@
 {
   "name": "@fusabase/logger",
-  "version": "26.3.0",
+  "version": "26.3.1",
   "type": "module",
-  "description": "Oracle® Backend with Firebase APIs Logger package",
-  "main": "./LogLevel.js",
+  "description": "Oracle Backend for Firebase Logger package",
+  "main": "./dist/LogLevel.js",
   "exports": {
     ".": {
-      "types": "./LogLevel.d.ts",
-      "import": "./LogLevel.js"
+      "types": "./dist/LogLevel.d.ts",
+      "import": "./dist/LogLevel.js"
+    },
+    "./*": {
+      "types": "./dist/*",
+      "import": "./dist/*"
     }
   },
   "dependencies": {
     "tslib": "^2.8.1"
-  }
+  },
+  "types": "./dist/LogLevel.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

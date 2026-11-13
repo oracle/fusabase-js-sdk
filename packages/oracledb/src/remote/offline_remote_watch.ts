@@ -25,9 +25,9 @@
 //-----------------------------------------------------------------------------
 // 
 
-import { CollectionReference, Query } from '../collection/reference.js';
+import { CollectionReference, DualityViewColReference, Query } from '../collection/reference.js';
 import { QuerySnapshot } from '../collection/snapshot.js';
-import { DocumentReference } from '../document/reference.js';
+import { DocumentReference, DualityViewDocReference } from '../document/reference.js';
 import { DocumentSnapshot } from '../document/snapshot.js';
 import { Oracledb } from '../internal/core.js';
 import { OfflineQueryTarget } from '../local/types.js';
@@ -39,7 +39,9 @@ import { DocumentData } from '../types/common.js';
 type WatchTarget =
   | Query<any, any>
   | CollectionReference<any, any>
-  | DocumentReference<any, any>;
+  | DualityViewColReference<any, any>
+  | DocumentReference<any, any>
+  | DualityViewDocReference<any, any>;
 
 export type OfflineRemoteWatchDocumentChange = {
   targetId: number;
@@ -50,6 +52,16 @@ export type OfflineRemoteWatchDocumentChange = {
   commitTime?: string;
   readTime?: string;
 };
+
+/** @internal Identifies a terminal realtime registration failure. */
+export class OfflineRealtimeUnavailableError extends Error {
+  readonly code = 'UNAVAILABLE';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'OfflineRealtimeUnavailableError';
+  }
+}
 
 type OfflineRemoteWatchObserver = {
   nextSnapshot: (snapshot: QuerySnapshot<any, any> | DocumentSnapshot<any, any>) => void;
@@ -62,8 +74,6 @@ type ListenPayload = {
   payload: {
     path: string[];
     conditions: any[];
-    explicitOrder: any[];
-    joins?: any[];
   };
   queryObject: Record<string, unknown>;
 };
@@ -88,12 +98,41 @@ export class OfflineRemoteWatch {
   ): () => void {
     const listenPayload = this.buildListenPayload(target, storedTarget);
     let closed = false;
-    const handleMessage = (event: Event) => {
+    let authStateKey = (this.db as any).__getAuthStateKey();
+    let realtimeGeneration = (this.db as any).__getRealtimeGeneration();
+    const stop = (error?: Error, sendUnsubscribe = false) => {
       if (closed) return;
-      const message = (event as CustomEvent<any>).detail;
-      if (!message || message.queryId !== listenPayload.queryId || !message.rowId) {
+      closed = true;
+      this.db.eventManager?.removeEventListener?.('offline socket message', handleMessage);
+      this.db.eventManager?.removeEventListener?.('authentication changed', handleAuthChange);
+      if (sendUnsubscribe) {
+        (this.db as any).__sendMessage({
+          queryId: listenPayload.queryId,
+          status: 0,
+          payload: listenPayload.payload,
+        });
+      }
+      if (error) observer.error(error);
+    };
+    const handleAuthChange = () => {
+      stop(new Error('Offline listener ended because authentication changed.'));
+    };
+    const handleMessage = (event: Event) => {
+      if (closed ||
+          authStateKey !== (this.db as any).__getAuthStateKey() ||
+          realtimeGeneration !== (this.db as any).__getRealtimeGeneration()) {
+        if (!closed) handleAuthChange();
         return;
       }
+      const message = (event as CustomEvent<any>).detail;
+      if (!message || message.queryId !== listenPayload.queryId) {
+        return;
+      }
+      if (message.code === 'UNAVAILABLE' && typeof message.error === 'string') {
+        stop(new OfflineRealtimeUnavailableError(message.error));
+        return;
+      }
+      if (!message.rowId) return;
       const change = this.documentChangeFromSocketMessage(storedTarget, message);
       if (change) {
         observer.nextDocumentChange(change);
@@ -101,29 +140,33 @@ export class OfflineRemoteWatch {
     };
 
     this.db.eventManager?.addEventListener?.('offline socket message', handleMessage);
+    this.db.eventManager?.addEventListener?.('authentication changed', handleAuthChange);
+    (this.db as any).__ensureAuthStateListener();
     this.openSocket()
       .then(() => {
-        if (closed) return;
+        if (closed || authStateKey !== (this.db as any).__getAuthStateKey()) {
+          if (!closed) handleAuthChange();
+          return;
+        }
+        realtimeGeneration = (this.db as any).__getRealtimeGeneration();
         (this.db as any).__sendMessage(listenPayload.queryObject);
         return this.fetchInitialSnapshot(target);
       })
       .then(snapshot => {
-        if (!closed && snapshot) {
+        if (!closed && snapshot &&
+            authStateKey === (this.db as any).__getAuthStateKey() &&
+            realtimeGeneration === (this.db as any).__getRealtimeGeneration()) {
           observer.nextSnapshot(snapshot);
+        } else if (!closed) {
+          handleAuthChange();
         }
       })
       .catch(error => {
-        if (!closed) observer.error(error);
+        if (!closed) stop(error instanceof Error ? error : new Error(String(error)));
       });
 
     return () => {
-      closed = true;
-      this.db.eventManager?.removeEventListener?.('offline socket message', handleMessage);
-      (this.db as any).__sendMessage({
-        queryId: listenPayload.queryId,
-        status: 0,
-        payload: listenPayload.payload,
-      });
+      stop(undefined, true);
     };
   }
 
@@ -132,29 +175,48 @@ export class OfflineRemoteWatch {
     observer: OfflineRemoteWatchObserver
   ): () => void {
     let closed = false;
+    const authStateKey = (this.db as any).__getAuthStateKey();
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const stop = (error?: Error) => {
+      if (closed) return;
+      closed = true;
+      if (intervalId) clearInterval(intervalId);
+      this.db.eventManager?.removeEventListener?.('authentication changed', handleAuthChange);
+      if (error) observer.error(error);
+    };
+    const handleAuthChange = () => {
+      stop(new Error('Offline listener ended because authentication changed.'));
+    };
     const fetchSnapshot = () => {
+      if (closed || authStateKey !== (this.db as any).__getAuthStateKey()) {
+        if (!closed) handleAuthChange();
+        return;
+      }
       this.fetchInitialSnapshot(target)
         .then(snapshot => {
-          if (!closed) {
+          if (!closed && authStateKey === (this.db as any).__getAuthStateKey()) {
             observer.nextSnapshot(snapshot);
+          } else if (!closed) {
+            handleAuthChange();
           }
         })
         .catch(error => {
           if (!closed) {
             this.db.eventManager?.dispatchEvent?.(new Event('long polling error'));
-            observer.error(error);
+            stop(error instanceof Error ? error : new Error(String(error)));
           }
         });
     };
+    (this.db as any).__ensureAuthStateListener();
+    this.db.eventManager?.addEventListener?.('authentication changed', handleAuthChange);
     fetchSnapshot();
-    const intervalId = setInterval(
+    intervalId = setInterval(
       fetchSnapshot,
       (this.db._settings.experimentalLongPollingOptions?.timeoutSeconds || 10) * 1000
     );
 
     return () => {
-      closed = true;
-      clearInterval(intervalId);
+      stop();
     };
   }
 
@@ -176,29 +238,31 @@ export class OfflineRemoteWatch {
   }
 
   private buildListenPayload(target: WatchTarget, storedTarget: OfflineQueryTarget): ListenPayload {
-    const isDocumentTarget = target instanceof DocumentReference || storedTarget.targetType === 'document';
+    const isDocumentTarget = target instanceof DocumentReference || target instanceof DualityViewDocReference || storedTarget.targetType === 'document';
     const targetLike = target as any;
     const payload = isDocumentTarget
       ? {
         path: this.pathSegments(storedTarget.path, targetLike._path),
         conditions: [],
-        explicitOrder: [],
       }
       : {
         path: this.pathSegments(storedTarget.path, targetLike._path),
         conditions: targetLike._conditions ?? storedTarget.filters ?? [],
-        explicitOrder: targetLike._explicitOrder ?? storedTarget.orderBy ?? [],
-        joins: targetLike._joins ?? [],
       };
-    const queryId = Math.abs(snapHashcode(JSON.stringify(payload)));
+    const subscriptionIdentity = {
+      targetType: storedTarget.referenceType,
+      path: payload.path,
+      conditions: payload.conditions,
+      explicitOrder: targetLike._explicitOrder ?? [],
+      limit: targetLike._limit ?? 0,
+      column: targetLike._column ?? []
+    };
+    const queryId = Math.abs(snapHashcode(JSON.stringify(subscriptionIdentity)));
     const queryObject: Record<string, unknown> = {
       queryId,
       status: 1,
       payload,
     };
-    if (!isDocumentTarget) {
-      queryObject.TABLE_NAME = '';
-    }
     return { queryId, payload, queryObject };
   }
 
@@ -217,12 +281,27 @@ export class OfflineRemoteWatch {
     const changedData = message.changedData && typeof message.changedData === 'object'
       ? { ...message.changedData }
       : {};
-    let oid = changedData.OID != null ? String(changedData.OID) : undefined;
+    const messageMetadata = message._metadata && typeof message._metadata === 'object'
+      ? message._metadata
+      : {};
+    let oid = messageMetadata.OID != null
+      ? String(messageMetadata.OID)
+      : changedData.OID != null
+        ? String(changedData.OID)
+        : undefined;
     delete changedData.OID;
 
     const metadata = changedData._metadata;
-    let version = typeof metadata?.etag === 'string' ? metadata.etag : undefined;
-    let readTime = typeof metadata?.asof === 'string' ? metadata.asof : undefined;
+    let version = messageMetadata.VERSION != null
+      ? String(messageMetadata.VERSION)
+      : typeof metadata?.etag === 'string'
+        ? metadata.etag
+        : undefined;
+    let readTime = messageMetadata.ASOF != null
+      ? String(messageMetadata.ASOF)
+      : typeof metadata?.asof === 'string'
+        ? metadata.asof
+        : undefined;
     delete changedData._metadata;
 
     if (changedData.VERSION != null) {
@@ -234,13 +313,19 @@ export class OfflineRemoteWatch {
       delete changedData.ASOF;
     }
 
-    const updateTime = changedData.LAST_MODIFIED != null ? String(changedData.LAST_MODIFIED) : undefined;
-    delete changedData.LAST_MODIFIED;
-    const commitTime = changedData.commitTime != null
-      ? String(changedData.commitTime)
-      : changedData.COMMIT_TIME != null
-        ? String(changedData.COMMIT_TIME)
+    const updateTime = messageMetadata.LAST_MODIFIED != null
+      ? String(messageMetadata.LAST_MODIFIED)
+      : changedData.LAST_MODIFIED != null
+        ? String(changedData.LAST_MODIFIED)
         : undefined;
+    delete changedData.LAST_MODIFIED;
+    const commitTime = messageMetadata.COMMIT_TIME != null
+      ? String(messageMetadata.COMMIT_TIME)
+      : changedData.commitTime != null
+        ? String(changedData.commitTime)
+        : changedData.COMMIT_TIME != null
+          ? String(changedData.COMMIT_TIME)
+          : undefined;
     delete changedData.commitTime;
     delete changedData.COMMIT_TIME;
 

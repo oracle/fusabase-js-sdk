@@ -24,9 +24,8 @@
 //
 //-----------------------------------------------------------------------------
 // 
-
 import type { App } from './public-types.js';
-import { attachAppTrustHeader, getAppTrustToken, shouldAttachAppTrustHeader } from './app-trust-header.js';
+import { attachAppTrustHeader, getAppTrustToken, setAppTrustToken, shouldAttachAppTrustHeader } from './app-trust-header.js';
 
 function includesAppTrustHint(text: string): boolean {
   return text.toLowerCase().includes('appcheck');
@@ -34,7 +33,9 @@ function includesAppTrustHint(text: string): boolean {
 
 /** @internal */
 export async function fusabaseFetch(app: App | undefined, url: string, init: RequestInit): Promise<Response> {
-  const doFetch = (reqInit: RequestInit) => fetch(url, reqInit);
+  // Requests sent through this wrapper can carry credentials. Reject redirects
+  // rather than following a server-selected destination automatically.
+  const doFetch = (reqInit: RequestInit) => fetch(url, { ...reqInit, redirect: 'error' });
   const shouldAttachHeaders = shouldAttachAppTrustHeader(app, url);
 
   if (app && shouldAttachHeaders) {
@@ -42,7 +43,8 @@ export async function fusabaseFetch(app: App | undefined, url: string, init: Req
     const tok = getAppTrustToken(app);
     if (appTrustInstance && !tok) {
       try {
-        await (app as any)?._getAppTrustToken?.(false);
+        const tokenResult = await (app as any)?._getAppTrustToken?.(false);
+        cacheReturnedAppTrustToken(app, tokenResult);
       } catch {
       }
     }
@@ -67,7 +69,8 @@ export async function fusabaseFetch(app: App | undefined, url: string, init: Req
   if (!appTrustInstance) return res;
 
   try {
-    await (app as any)?._getAppTrustToken?.(true);
+    const tokenResult = await (app as any)?._getAppTrustToken?.(true);
+    cacheReturnedAppTrustToken(app, tokenResult);
   } catch {
     return res;
   }
@@ -75,4 +78,13 @@ export async function fusabaseFetch(app: App | undefined, url: string, init: Req
   reqInit = attachAppTrustHeader(app, url, init);
   res = await doFetch(reqInit);
   return res;
+}
+
+function cacheReturnedAppTrustToken(app: App | undefined, tokenResult: unknown): void {
+  if (!tokenResult || typeof tokenResult !== 'object') return;
+
+  const token = (tokenResult as { token?: unknown }).token;
+  if (typeof token === 'string' && token) {
+    setAppTrustToken(app, token);
+  }
 }

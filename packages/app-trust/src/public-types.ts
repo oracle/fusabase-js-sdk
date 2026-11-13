@@ -27,6 +27,7 @@
 
 import type { App } from '../../app/src/public-types.js';
 
+/** Describes the public `AppTrustToken` value. */
 export interface AppTrustToken {
   /**
    * FUSABASE App Trust token value.
@@ -41,12 +42,16 @@ export interface AppTrustToken {
   expireTimeMillis: number;
 }
 
+/** Describes the public `AppTrustTokenResult` value. */
 export interface AppTrustTokenResult extends AppTrustToken {}
 
+/** Receives each newly issued App Trust token. */
 export type AppTrustTokenListener = (token: AppTrustTokenResult) => void;
 
+/** Removes a previously registered App Trust token listener. */
 export type Unsubscribe = () => void;
 
+/** Describes the public `AppTrustOptions` value. */
 export interface AppTrustOptions {
   /**
    * Provider used to mint an attestation token in the browser.
@@ -60,6 +65,7 @@ export interface AppTrustOptions {
     | HCaptchaProvider;
 }
 
+/** Describes the public `AppTrust` value. */
 export interface AppTrust {
   /**
    * The {@link App} instance that this App Trust service is associated with.
@@ -68,11 +74,11 @@ export interface AppTrust {
 }
 
 /**
- * Browser attestation provider backed by reCAPTCHA v3.
+ * Browser provider that obtains an attestation token using reCAPTCHA v3.
  *
  * @example
  * ```ts
- * const provider = new ReCaptchaV3Provider('site-key');
+ * const provider = new ReCaptchaV3Provider("site-key");
  * ```
  */
 export class ReCaptchaV3Provider {
@@ -80,12 +86,13 @@ export class ReCaptchaV3Provider {
   readonly siteKey: string;
 
   /**
-   * Creates a reCAPTCHA v3 provider.
+   * Creates a browser attestation provider.
    *
-   * @param siteKey - Your reCAPTCHA v3 site key.
+   * @param siteKey - Site key supplied by the attestation provider.
+   * @returns A configured provider instance.
    * @example
    * ```ts
-   * new ReCaptchaV3Provider('site-key');
+   * const provider = new ReCaptchaV3Provider("site-key");
    * ```
    */
   constructor(siteKey: string) {
@@ -136,11 +143,11 @@ export class ReCaptchaV3Provider {
 }
 
 /**
- * Browser attestation provider backed by reCAPTCHA Enterprise.
+ * Browser provider that obtains an enterprise attestation token.
  *
  * @example
  * ```ts
- * const provider = new ReCaptchaEnterpriseProvider('site-key');
+ * const provider = new ReCaptchaEnterpriseProvider("site-key");
  * ```
  */
 export class ReCaptchaEnterpriseProvider {
@@ -148,12 +155,13 @@ export class ReCaptchaEnterpriseProvider {
   readonly siteKey: string;
 
   /**
-   * Creates a reCAPTCHA Enterprise provider.
+   * Creates an enterprise attestation provider.
    *
-   * @param siteKey - Your reCAPTCHA Enterprise site key.
+   * @param siteKey - Site key supplied by the attestation provider.
+   * @returns A configured provider instance.
    * @example
    * ```ts
-   * new ReCaptchaEnterpriseProvider('site-key');
+   * const provider = new ReCaptchaEnterpriseProvider("site-key");
    * ```
    */
   constructor(siteKey: string) {
@@ -205,11 +213,11 @@ export class ReCaptchaEnterpriseProvider {
 }
 
 /**
- * Browser attestation provider backed by Turnstile.
+ * Browser provider that obtains an attestation token through Turnstile.
  *
  * @example
  * ```ts
- * const provider = new TurnstileProvider('site-key');
+ * const provider = new TurnstileProvider("site-key");
  * ```
  */
 export class TurnstileProvider {
@@ -220,13 +228,13 @@ export class TurnstileProvider {
   private _inFlight?: Promise<string>;
 
   /**
-   * Creates a Turnstile provider.
+   * Creates a Turnstile attestation provider.
    *
-   * @param siteKey - The Turnstile site key.
+   * @param siteKey - Site key supplied by the attestation provider.
    * @returns A configured provider instance.
    * @example
    * ```ts
-   * new TurnstileProvider('site-key');
+   * const provider = new TurnstileProvider("site-key");
    * ```
    */
   constructor(siteKey: string) {
@@ -275,9 +283,17 @@ export class TurnstileProvider {
       const TIMEOUT_MS = 20000;
 
       const container = document.createElement('div');
-      container.style.position = 'absolute';
-      container.style.left = '-9999px';
-      container.style.top = '-9999px';
+      Object.assign(container.style, {
+        position: 'fixed',
+        left: '50%',
+        top: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: '2147483647',
+        background: '#fff',
+        padding: '20px',
+        borderRadius: '12px',
+        boxShadow: '0 12px 40px rgba(0,0,0,.25)',
+      });
       document.body.appendChild(container);
 
       let widgetId: any;
@@ -355,11 +371,11 @@ export class TurnstileProvider {
 }
 
 /**
- * Browser attestation provider backed by hCaptcha.
+ * Browser provider that obtains an attestation token through hCaptcha.
  *
  * @example
  * ```ts
- * const provider = new HCaptchaProvider('site-key');
+ * const provider = new HCaptchaProvider("site-key");
  * ```
  */
 export class HCaptchaProvider {
@@ -367,12 +383,13 @@ export class HCaptchaProvider {
   readonly siteKey: string;
 
   /**
-   * Creates an hCaptcha provider.
+   * Creates an hCaptcha attestation provider.
    *
-   * @param siteKey - Your hCaptcha site key.
+   * @param siteKey - Site key supplied by the attestation provider.
+   * @returns A configured provider instance.
    * @example
    * ```ts
-   * new HCaptchaProvider('site-key');
+   * const provider = new HCaptchaProvider("site-key");
    * ```
    */
   constructor(siteKey: string) {
@@ -419,9 +436,17 @@ export class HCaptchaProvider {
     }
 
     const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
-    container.style.top = '-9999px';
+    Object.assign(container.style, {
+      position: 'fixed',
+      left: '50%',
+      top: '50%',
+      transform: 'translate(-50%, -50%)',
+      zIndex: '2147483647',
+      background: '#fff',
+      padding: '20px',
+      borderRadius: '12px',
+      boxShadow: '0 12px 40px rgba(0,0,0,.25)',
+    });
     document.body.appendChild(container);
 
     try {

@@ -27,9 +27,8 @@
 
 // test/fusabase.test.js
 import * as assert from 'node:assert';
-import { options } from './config.js';
 import {App, initializeApp, setLogLevel} from "fusabase/app";
-import { 
+import {
   getOracledb, 
   collection, 
   doc, 
@@ -68,9 +67,12 @@ import {
   sum
 } from 'fusabase/oracledb';
 import { expect } from 'chai';
+import { testAppConfig } from "./test_config.js";
 
 describe('fusabase Integration Tests for version 1', function () {
   this.timeout(30000);
+
+  const options = testAppConfig;
 
   let app, db, cityRef, cityRef1, subColPlacesRef, fd1, docRef, docRef1, res9, subDocColPlacesRef;
   const collectionName = "Users";
@@ -104,7 +106,7 @@ describe('fusabase Integration Tests for version 1', function () {
   
 
   it('should initialize the app', () => {
-    app = initializeApp(options, "test");
+    app = initializeApp({...options,app_trust_token:"APP_TRUST_TOKEN"}, "test-oracledb-v1");
     expect(app.options.ordsHost, options.ords_host);
     expect(app.options.schema, options.schema);
     expect(app.options.appID, options.app_id);
@@ -138,7 +140,7 @@ describe('fusabase Integration Tests for version 1', function () {
     cityRef1 = collection(db, "pl");
     assert.ok(cityRef);
     assert.ok(cityRef.oracledb);
-    expect(cityRef.oracledb.app.name, 'test');
+    expect(cityRef.oracledb.app.name, 'test-oracledb-v1');
     expect(cityRef.id, 'city');
     expect(cityRef.path, 'city');
     assert.ok(!cityRef.parent);
@@ -222,7 +224,7 @@ describe('fusabase Integration Tests for version 1', function () {
   });
 
   it('should get on query level', async () => {
-    const resdoc = await getDocs(collection(getOracledb(), "city"));
+    const resdoc = await getDocs(collection(getOracledb(app), "city"));
     assert.ok(resdoc);
   });
 
@@ -258,6 +260,7 @@ describe('fusabase Integration Tests for version 1', function () {
 
   it('collection group', async () => {
     const nycRef = collectionGroup(db, 'comments');
+    expect(nycRef._path).to.deep.equal([]);
     const res = await getDocs(nycRef);
     expect(res).to.exist;
     expect(res._docs).to.exist;
@@ -401,19 +404,19 @@ describe('fusabase Integration Tests for version 1', function () {
   });
 
   it('should delete document TEMP from city collection', async function () {
-    await setDoc(doc(getOracledb(), "city", "TEMP"), {
+    await setDoc(doc(getOracledb(app), "city", "TEMP"), {
       name: "San Francisco", state: "CA", country: "USA",
       capital: false, population: 860000,
       regions: ["west_coast", "norcal"]
     });
-    await deleteDoc(doc(getOracledb(), "city", "TEMP"));
+    await deleteDoc(doc(getOracledb(app), "city", "TEMP"));
   });
 
   it('should create correct document reference for SF', function () {
-    docRef = doc(getOracledb(), "city", "SF");
+    docRef = doc(getOracledb(app), "city", "SF");
     expect(docRef).to.exist;
     expect(docRef.oracledb).to.exist;
-    expect(docRef.oracledb.app.name).to.equal("test");
+    expect(docRef.oracledb.app.name).to.equal("test-oracledb-v1");
     expect(docRef.id).to.equal("SF");
     expect(docRef.path).to.equal("city/SF");
     expect(docRef.parent.id).to.equal("city");
@@ -427,10 +430,10 @@ describe('fusabase Integration Tests for version 1', function () {
   });
 
   it('should create correct subcollection reference for SF/places', function () {
-    subColPlacesRef = collection(doc(getOracledb(), "city", "SF"), "places");
+    subColPlacesRef = collection(doc(getOracledb(app), "city", "SF"), "places");
     expect(subColPlacesRef).to.exist;
     expect(subColPlacesRef.oracledb).to.exist;
-    expect(subColPlacesRef.oracledb.app.name).to.equal("test");
+    expect(subColPlacesRef.oracledb.app.name).to.equal("test-oracledb-v1");
     expect(subColPlacesRef.id).to.equal("places");
     expect(subColPlacesRef.path).to.equal("city/SF/places");
     expect(subColPlacesRef.parent.id).to.equal("SF");
@@ -449,14 +452,14 @@ describe('fusabase Integration Tests for version 1', function () {
     subDocColPlacesRef = doc(subColPlacesRef, "P1");
     expect(subDocColPlacesRef).to.exist;
     expect(subDocColPlacesRef.oracledb).to.exist;
-    expect(subDocColPlacesRef.oracledb.app.name).to.equal("test");
+    expect(subDocColPlacesRef.oracledb.app.name).to.equal("test-oracledb-v1");
     expect(subDocColPlacesRef.id).to.equal("P1");
     expect(subDocColPlacesRef.path).to.equal("city/SF/places/P1");
     expect(subDocColPlacesRef.parent.id).to.equal("places");
   });
 
   it('should verify QuerySnapshot from city collection', async function () {
-    const res7 = await getDocs(collection(getOracledb(), "city"));
+    const res7 = await getDocs(collection(getOracledb(app), "city"));
     expect(res7.docs).to.exist;
     expect(res7.empty).to.be.false;
     expect(res7.query).to.exist;
@@ -466,7 +469,7 @@ describe('fusabase Integration Tests for version 1', function () {
   });
 
   it('should iterate through QuerySnapshot documents', async function () {
-    const res7 = await getDocs(collection(getOracledb(), "city"));
+    const res7 = await getDocs(collection(getOracledb(app), "city"));
     res7.forEach(res => {
       expect(res.exists()).to.be.true;
       expect(res.id).to.exist;
@@ -478,37 +481,37 @@ describe('fusabase Integration Tests for version 1', function () {
   });
 
   it('should limit results with limitToLast', async function () {
-    const res8 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population", "desc"), limit(3)));
+    const res8 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population", "desc"), limit(3)));
     expect(res8._docs.length).to.equal(3);
   });
 
   it('should return correct result for startAt', async function () {
-    const res9 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), startAt(860000)));
+    const res9 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), startAt(860000)));
     expect(res9._docs[0].data().population).to.equal(860000);
   });
 
   it('should return correct result for startAfter', async function () {
-    const res10 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), startAfter(860000)));
+    const res10 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), startAfter(860000)));
     expect(res10._docs[0].data().population).to.be.greaterThan(860000);
   });
 
   it('should return correct result for endAt', async function () {
-    const res11 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), endAt(860000)));
+    const res11 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), endAt(860000)));
     expect(res11._docs[res11._docs.length - 1].data().population).to.equal(860000);
   });
 
   it('should return correct result for endBefore', async function () {
-    const res12 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), endBefore(860000)));
+    const res12 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), endBefore(860000)));
     expect(res12._docs[res12._docs.length - 1].data().population).to.be.lessThan(860000);
   });
 
   it('should work with startAt and FieldPath', async function () {
-    const res13 = await getDocs(query(collection(getOracledb(), "city"), orderBy(new FieldPath("population")), startAt(860000)));
+    const res13 = await getDocs(query(collection(getOracledb(app), "city"), orderBy(new FieldPath("population")), startAt(860000)));
     expect(res13._docs[0].data().population).to.equal(860000);
   });
 
   it('should work with where and FieldPath', async function () {
-    const res14 = await getDocs(query(collection(getOracledb(), "city"), where(new FieldPath("capital"), "==", true)));
+    const res14 = await getDocs(query(collection(getOracledb(app), "city"), where(new FieldPath("capital"), "==", true)));
     expect(res14).to.exist;
     expect(res14._docs).to.exist;
     expect(res14.query).to.exist;
@@ -524,23 +527,23 @@ describe('fusabase Integration Tests for version 1', function () {
   });
 
   it('should work with startAt using DocumentSnapshot', async function () {
-    const res9 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), startAt(860000)));
-    const res15 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), startAt(res9.docs[0])));
+    const res9 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), startAt(860000)));
+    const res15 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), startAt(res9.docs[0])));
     expect(res15._docs[0].data().population).to.equal(860000);
   });
 
   it('should work with startAfter using DocumentSnapshot', async function () {
-    const res16 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), startAfter(860000)));
+    const res16 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), startAfter(860000)));
     expect(res16._docs[0].data().population).to.be.greaterThan(860000);
   });
 
   it('should work with endAt using DocumentSnapshot', async function () {
-    const res17 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), endAt(860000)));
+    const res17 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), endAt(860000)));
     expect(res17._docs[res17._docs.length - 1].data().population).to.equal(860000);
   });
 
   it('should work with endBefore using DocumentSnapshot', async function () {
-    const res18 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), endBefore(860000)));
+    const res18 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), endBefore(860000)));
     expect(res18._docs[res18._docs.length - 1].data().population).to.be.lessThan(860000);
   });
 
@@ -936,6 +939,8 @@ describe('fusabase Integration Tests for version 1', function () {
 describe('fusabase Integration Tests for version 2', function () {
   this.timeout(30000);
 
+  const options = testAppConfig;
+
   let app, db, cityRef, cityRef1, subColPlacesRef, fd1, docRef, docRef1, res9, subDocColPlacesRef;
   const collectionName = "Users";
   let testDocId;
@@ -962,13 +967,13 @@ describe('fusabase Integration Tests for version 2', function () {
 
   let testDocId1;
   const initialData1 = {
-    "_id": 20051, "name": "Alice", "age": 30,
+    "_id": 20052, "name": "Alice", "age": 30,
     "about": "Student"
   };
   
 
   it('should initialize the app', () => {
-    app = initializeApp(options, "test");
+    app = initializeApp({...options,app_trust_token:"APP_TRUST_TOKEN"}, "test-oracledb-v2");
     expect(app.options.ordsHost, options.ords_host);
     expect(app.options.schema, options.schema);
     expect(app.options.appID, options.app_id);
@@ -1002,7 +1007,7 @@ describe('fusabase Integration Tests for version 2', function () {
     cityRef1 = collection(db, "pl");
     assert.ok(cityRef);
     assert.ok(cityRef.oracledb);
-    expect(cityRef.oracledb.app.name, 'test');
+    expect(cityRef.oracledb.app.name, 'test-oracledb-v2');
     expect(cityRef.id, 'city');
     expect(cityRef.path, 'city');
     assert.ok(!cityRef.parent);
@@ -1086,7 +1091,7 @@ describe('fusabase Integration Tests for version 2', function () {
   });
 
   it('should get on query level', async () => {
-    const resdoc = await getDocs(collection(getOracledb(), "city"));
+    const resdoc = await getDocs(collection(getOracledb(app), "city"));
     assert.ok(resdoc);
   });
 
@@ -1112,7 +1117,7 @@ describe('fusabase Integration Tests for version 2', function () {
 
   it('should execute WriteBatch', async () => {
     const batch = writeBatch(db);
-    const nycRef = doc(cityRef, "BATCH_TEST");;
+    const nycRef = doc(cityRef, "BATCH_TEST1");;
     batch.set(nycRef, { name: 'New York City' });
     batch.update(nycRef, { population: 11000 });
     batch.delete(nycRef);
@@ -1122,6 +1127,7 @@ describe('fusabase Integration Tests for version 2', function () {
 
   it('collection group', async () => {
     const nycRef = collectionGroup(db, 'comments');
+    expect(nycRef._path).to.deep.equal([]);
     const res = await getDocs(nycRef);
     expect(res).to.exist;
     expect(res._docs).to.exist;
@@ -1265,19 +1271,19 @@ describe('fusabase Integration Tests for version 2', function () {
   });
 
   it('should delete document TEMP from city collection', async function () {
-    await setDoc(doc(getOracledb(), "city", "TEMP"), {
+    await setDoc(doc(getOracledb(app), "city", "TEMP"), {
       name: "San Francisco", state: "CA", country: "USA",
       capital: false, population: 860000,
       regions: ["west_coast", "norcal"]
     });
-    await deleteDoc(doc(getOracledb(), "city", "TEMP"));
+    await deleteDoc(doc(getOracledb(app), "city", "TEMP"));
   });
 
   it('should create correct document reference for SF', function () {
-    docRef = doc(getOracledb(), "city", "SF");
+    docRef = doc(getOracledb(app), "city", "SF");
     expect(docRef).to.exist;
     expect(docRef.oracledb).to.exist;
-    expect(docRef.oracledb.app.name).to.equal("test");
+    expect(docRef.oracledb.app.name).to.equal("test-oracledb-v2");
     expect(docRef.id).to.equal("SF");
     expect(docRef.path).to.equal("city/SF");
     expect(docRef.parent.id).to.equal("city");
@@ -1291,10 +1297,10 @@ describe('fusabase Integration Tests for version 2', function () {
   });
 
   it('should create correct subcollection reference for SF/places', function () {
-    subColPlacesRef = collection(doc(getOracledb(), "city", "SF"), "places");
+    subColPlacesRef = collection(doc(getOracledb(app), "city", "SF"), "places");
     expect(subColPlacesRef).to.exist;
     expect(subColPlacesRef.oracledb).to.exist;
-    expect(subColPlacesRef.oracledb.app.name).to.equal("test");
+    expect(subColPlacesRef.oracledb.app.name).to.equal("test-oracledb-v2");
     expect(subColPlacesRef.id).to.equal("places");
     expect(subColPlacesRef.path).to.equal("city/SF/places");
     expect(subColPlacesRef.parent.id).to.equal("SF");
@@ -1313,14 +1319,14 @@ describe('fusabase Integration Tests for version 2', function () {
     subDocColPlacesRef = doc(subColPlacesRef, "P1");
     expect(subDocColPlacesRef).to.exist;
     expect(subDocColPlacesRef.oracledb).to.exist;
-    expect(subDocColPlacesRef.oracledb.app.name).to.equal("test");
+    expect(subDocColPlacesRef.oracledb.app.name).to.equal("test-oracledb-v2");
     expect(subDocColPlacesRef.id).to.equal("P1");
     expect(subDocColPlacesRef.path).to.equal("city/SF/places/P1");
     expect(subDocColPlacesRef.parent.id).to.equal("places");
   });
 
   it('should verify QuerySnapshot from city collection', async function () {
-    const res7 = await getDocs(collection(getOracledb(), "city"));
+    const res7 = await getDocs(collection(getOracledb(app), "city"));
     expect(res7.docs).to.exist;
     expect(res7.empty).to.be.false;
     expect(res7.query).to.exist;
@@ -1330,7 +1336,7 @@ describe('fusabase Integration Tests for version 2', function () {
   });
 
   it('should iterate through QuerySnapshot documents', async function () {
-    const res7 = await getDocs(collection(getOracledb(), "city"));
+    const res7 = await getDocs(collection(getOracledb(app), "city"));
     res7.forEach(res => {
       expect(res.exists()).to.be.true;
       expect(res.id).to.exist;
@@ -1342,37 +1348,37 @@ describe('fusabase Integration Tests for version 2', function () {
   });
 
   it('should limit results with limitToLast', async function () {
-    const res8 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population", "desc"), limit(3)));
+    const res8 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population", "desc"), limit(3)));
     expect(res8._docs.length).to.equal(3);
   });
 
   it('should return correct result for startAt', async function () {
-    const res9 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), startAt(860000)));
+    const res9 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), startAt(860000)));
     expect(res9._docs[0].data().population).to.equal(860000);
   });
 
   it('should return correct result for startAfter', async function () {
-    const res10 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), startAfter(860000)));
+    const res10 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), startAfter(860000)));
     expect(res10._docs[0].data().population).to.be.greaterThan(860000);
   });
 
   it('should return correct result for endAt', async function () {
-    const res11 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), endAt(860000)));
+    const res11 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), endAt(860000)));
     expect(res11._docs[res11._docs.length - 1].data().population).to.equal(860000);
   });
 
   it('should return correct result for endBefore', async function () {
-    const res12 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), endBefore(860000)));
+    const res12 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), endBefore(860000)));
     expect(res12._docs[res12._docs.length - 1].data().population).to.be.lessThan(860000);
   });
 
   it('should work with startAt and FieldPath', async function () {
-    const res13 = await getDocs(query(collection(getOracledb(), "city"), orderBy(new FieldPath("population")), startAt(860000)));
+    const res13 = await getDocs(query(collection(getOracledb(app), "city"), orderBy(new FieldPath("population")), startAt(860000)));
     expect(res13._docs[0].data().population).to.equal(860000);
   });
 
   it('should work with where and FieldPath', async function () {
-    const res14 = await getDocs(query(collection(getOracledb(), "city"), where(new FieldPath("capital"), "==", true)));
+    const res14 = await getDocs(query(collection(getOracledb(app), "city"), where(new FieldPath("capital"), "==", true)));
     expect(res14).to.exist;
     expect(res14._docs).to.exist;
     expect(res14.query).to.exist;
@@ -1388,23 +1394,23 @@ describe('fusabase Integration Tests for version 2', function () {
   });
 
   it('should work with startAt using DocumentSnapshot', async function () {
-    const res9 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), startAt(860000)));
-    const res15 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), startAt(res9.docs[0])));
+    const res9 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), startAt(860000)));
+    const res15 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), startAt(res9.docs[0])));
     expect(res15._docs[0].data().population).to.equal(860000);
   });
 
   it('should work with startAfter using DocumentSnapshot', async function () {
-    const res16 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), startAfter(860000)));
+    const res16 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), startAfter(860000)));
     expect(res16._docs[0].data().population).to.be.greaterThan(860000);
   });
 
   it('should work with endAt using DocumentSnapshot', async function () {
-    const res17 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), endAt(860000)));
+    const res17 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), endAt(860000)));
     expect(res17._docs[res17._docs.length - 1].data().population).to.equal(860000);
   });
 
   it('should work with endBefore using DocumentSnapshot', async function () {
-    const res18 = await getDocs(query(collection(getOracledb(), "city"), orderBy("population"), endBefore(860000)));
+    const res18 = await getDocs(query(collection(getOracledb(app), "city"), orderBy("population"), endBefore(860000)));
     expect(res18._docs[res18._docs.length - 1].data().population).to.be.lessThan(860000);
   });
 

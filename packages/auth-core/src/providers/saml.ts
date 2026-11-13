@@ -1,0 +1,161 @@
+// Copyright (c) 2015, 2026, Oracle and/or its affiliates.
+
+//-----------------------------------------------------------------------------
+//
+// This software is dual-licensed to you under the Universal Permissive License
+// (UPL) 1.0 as shown at https://oss.oracle.com/licenses/upl and Apache License
+// 2.0 as shown at http://www.apache.org/licenses/LICENSE-2.0. You may choose
+// either license.
+//
+// If you elect to accept the software under the Apache License, Version 2.0,
+// the following applies:
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+//-----------------------------------------------------------------------------
+// 
+
+import { UserCredential, AuthCredential, SAMLAuthCredential } from '../internal/credential.js';
+import { AuthError, ErrorCode, ErrorCodeMessage } from '../errors.js';
+import { AuthProvider } from './provider.js';
+import { authErrorHandler } from '../errors.js';
+
+/**
+ * The SAMLAuthProvider class allows you to generate credentials for SAML-based authentication.
+ * It provides methods for obtaining credentials and setting custom parameters for SAML flows.
+ *
+ * @example
+ * ```ts
+ * // Example usage to generate SAMLAuthCredential using SAML access token
+ * const samlCredential = SAMLAuthProvider.credential('SAML_ACCESS_TOKEN');
+ * ```
+ */
+/** SAML authentication provider. @example `const provider = new SAMLAuthProvider("provider-id");` */
+export class SAMLAuthProvider extends AuthProvider {
+
+/** Describes the public `SAML_SIGN_IN_METHOD` value. */
+  static SAML_SIGN_IN_METHOD = "saml";
+/** Describes the public `PROVIDER_ID` value. */
+  static PROVIDER_ID: string = 'saml';
+
+  private customParameters: Record<string, unknown>;
+
+/**
+ * Constructs a SAMLAuthProvider instance with the supplied configuration.
+ *
+ * @param providerId - The provider identifier.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { SAMLAuthProvider } from "fusabase/auth";
+ * const result = new SAMLAuthProvider("example-provider");
+ * void result;
+ * ```
+ */
+  constructor(providerId: string) {
+    // Input Sanitation
+    if (typeof providerId === "string" && providerId !== "") {
+      super(providerId);
+      this.providerId = providerId;
+      this.customParameters = {};
+    }
+    else
+      throw authErrorHandler(new AuthError(ErrorCodeMessage.INVALID_ARGS,"Invalid providerId provided to SAMLAuthProvider"));
+  }
+
+  /**
+  * @property 
+  */
+  get providerName() {
+    return this.providerId;
+  }
+
+/**
+ * Executes the credential operation for this public SDK type.
+ *
+ * @param accessToken - Optional OAuth access token supplied by the provider.
+ * @returns The result produced by `credential`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { SAMLAuthProvider } from "fusabase/auth";
+ * const result = SAMLAuthProvider.credential("token");
+ * void result;
+ * ```
+ */
+  static credential(accessToken?: string): SAMLAuthCredential {
+    if (typeof accessToken !== "string") {
+      throw authErrorHandler(new AuthError(ErrorCodeMessage.INVALID_ARGS,"Invalid credentials provided to credential()"));
+    }
+
+    let samlCreds = new SAMLAuthCredential(this.PROVIDER_ID, this.SAML_SIGN_IN_METHOD);
+    samlCreds.accessToken = accessToken;
+
+    return samlCreds;
+  }
+
+/**
+ * Executes the credentialFromError operation for this public SDK type.
+ *
+ * @param error - The authentication or service error to inspect.
+ * @returns The result produced by `credentialFromError`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { SAMLAuthProvider } from "fusabase/auth";
+ * const result = SAMLAuthProvider.credentialFromError(new Error("example"));
+ * void result;
+ * ```
+ */
+    static credentialFromError(error: AuthError): AuthCredential | null {
+      if (!(error instanceof AuthError)) {
+        return null;
+      }
+      return null;
+    }
+
+/**
+ * Executes the credentialFromResult operation for this public SDK type.
+ *
+ * @param userCredential - The credential result returned by a completed sign-in flow.
+ * @returns The result produced by `credentialFromResult`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { SAMLAuthProvider } from "fusabase/auth";
+ * const result = SAMLAuthProvider.credentialFromResult(value);
+ * void result;
+ * ```
+ */
+    static credentialFromResult(userCredential: UserCredential): AuthCredential | null {
+      if (!(userCredential instanceof UserCredential)) {
+        let error = new AuthError(ErrorCodeMessage.INVALID_ARGS,`Invalid credentials`);
+        throw authErrorHandler(error);
+      }
+      return userCredential.credential;
+    }
+
+/**
+ * Executes the setCustomParameters operation for this public SDK type.
+ *
+ * @param params - Provider-specific OAuth parameters.
+ * @returns The result produced by `setCustomParameters`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { SAMLAuthProvider } from "fusabase/auth";
+ * const result = client.setCustomParameters({ prompt: "consent" });
+ * void result;
+ * ```
+ */
+    setCustomParameters(params: Record<string, unknown>): this {
+      this.customParameters = params;
+      return this;
+    }
+}

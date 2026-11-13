@@ -35,6 +35,19 @@ import { fetchWithRetry } from '../internal/utils.js';
 import { StorageError, StorageErrorCode, storageErrorHandler, getStorageErrorMessage } from '../errors.js';
 import { StorageReference } from '../internal/reference.js';
 
+function normalizeExpiryTime(timeExpires: Date | string): string {
+  const expiry = timeExpires instanceof Date ? timeExpires : new Date(timeExpires);
+  if (Number.isNaN(expiry.getTime())) {
+    const error = new StorageError(
+      StorageErrorCode.INVALID_ARGUMENT,
+      "Invalid download URL expiry time"
+    );
+    error.status = 400;
+    throw storageErrorHandler(error);
+  }
+  return expiry.toISOString();
+}
+
 /**
  * Internal Helper class for Storage.
  */
@@ -298,22 +311,31 @@ if (response) {
   /**
    * @internal
    */
-  async fetchDownloadUrl(path: string, access_token: string | null) {
+  async fetchDownloadUrl(
+    path: string,
+    access_token: string | null,
+    timeExpires?: Date | string
+  ) {
     let response = null;
     let result = null;
     const reqURL =
       `${this.URL}${getpreauth_REST_EP}?apiKey=${this.config.appID}`;
 
     const headers: Record<string, string> = {};
+    const body: Record<string, unknown> = {
+      bucket: this.bucket,
+      path: path, //fullPath
+      metadata: {},
+      access_type: "ObjectRead" //for getDownloadURL
+    };
+    if (timeExpires !== undefined) {
+      body.timeExpires = normalizeExpiryTime(timeExpires);
+    }
+
     const params = {
       method: "POST",
       headers: headers,
-      body: JSON.stringify({
-        bucket: this.bucket,
-        path: path, //fullPath
-        metadata: {},
-        access_type: "ObjectRead" //for getDownloadURL
-      }),
+      body: JSON.stringify(body),
     };
 
     if (access_token) {
