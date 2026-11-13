@@ -72,7 +72,7 @@ The exported types are `OfflineOptions`, `PersistenceKind`, and `PersistentLocal
 
 - Cache queries use locally available documents. Fetch or listen to needed documents while connected before relying on them offline. Snapshot metadata exposes `fromCache` and `hasPendingWrites`.
 - Local query evaluation supports ordinary filters, ordering, and limits. Cache reads reject joins, aggregates, vector search, and composite filters. Server-backed reads for those operations need network access.
-- `runTransaction` needs the server. Offline `writeBatch(db)` is queued locally when committed. `addDoc` on a normal collection generates a local ID.
+- `runTransaction` needs the server. Offline `writeBatch(db)` is queued locally when committed. `addDoc` on a normal collection generates a local ID; offline `addDoc` on a duality-view collection is unsupported because its ID comes from the server.
 - Keep IndexedDB data until pending writes have synced. `clearIndexedDbPersistence(db)` removes cached data and queued writes from the active persistence mode; reserve it for cases where that data should be discarded.
 
 ## Related Docs

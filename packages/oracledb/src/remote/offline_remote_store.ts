@@ -25,7 +25,7 @@
 //-----------------------------------------------------------------------------
 // 
 
-import { DocumentReference } from '../document/reference.js';
+import { DocumentReference, DualityViewDocReference } from '../document/reference.js';
 import { Oracledb } from '../internal/core.js';
 import { OfflineLocalStore } from '../local/index.js';
 import { OfflinePatchWrite, OfflineSetWrite, OfflineWriteBatch, OfflineWriteMutation } from '../model/index.js';
@@ -39,6 +39,12 @@ type BatchCallback = (
   rejectedBatchIds?: number[]
 ) => void;
 type RemoteStateCallback = (error?: unknown) => void;
+
+class OfflineBatchUserMismatchError extends Error {
+  constructor() {
+    super('Offline write belongs to a different authenticated user');
+  }
+}
 
 export class OfflineRemoteStore {
   private readonly pipeline = new OfflineWritePipeline();
@@ -57,7 +63,8 @@ export class OfflineRemoteStore {
     private readonly onBatchRejected: BatchCallback = () => undefined,
     private readonly onRemoteAttemptStarted: RemoteStateCallback = () => undefined,
     private readonly onRemoteSuccess: RemoteStateCallback = () => undefined,
-    private readonly onRemoteFailure: RemoteStateCallback = () => undefined
+    private readonly onRemoteFailure: RemoteStateCallback = () => undefined,
+    private readonly getCurrentUserId: () => string = () => 'anonymous'
   ) {}
 
   async fillWritePipeline(): Promise<void> {
@@ -67,16 +74,19 @@ export class OfflineRemoteStore {
   }
 
   async sendMutationBatch(batch: OfflineWriteBatch): Promise<void> {
+    this.assertBatchUser(batch);
     const results: unknown[] = [];
     const transactionName = `offline-${batch.batchId}`;
     for (let index = 0; index < batch.mutations.length; index++) {
+      this.assertBatchUser(batch);
       const transaction = {
         name: transactionName,
         start: index === 0 ? 1 : 0,
         end: index === batch.mutations.length - 1 ? 1 : 0,
       };
-      results.push(await this.sendMutation(batch.mutations[index], transaction));
+      results.push(await this.sendMutation(batch, batch.mutations[index], transaction));
     }
+    this.assertBatchUser(batch);
     const affectedKeys = await this.localStore.acknowledgeBatch(batch, results);
     this.retryAttempts = 0;
     this.onBatchAcknowledged(batch, undefined, affectedKeys);
@@ -105,6 +115,12 @@ export class OfflineRemoteStore {
       while (this.networkEnabled && this.pipeline.length > 0) {
         const batch = this.pipeline.peek();
         if (!batch) break;
+        if (!this.isBatchForCurrentUser(batch)) {
+          // Keep the durable batch in its original user lane. It will be
+          // reloaded if that user returns, but can never replay as another user.
+          this.pipeline.shift();
+          continue;
+        }
         const stillPending = (await this.localStore.getAllMutationBatches())
           .some(pendingBatch => pendingBatch.batchId === batch.batchId);
         if (!stillPending) {
@@ -117,6 +133,10 @@ export class OfflineRemoteStore {
           this.pipeline.shift();
           this.onRemoteSuccess();
         } catch (error) {
+          if (error instanceof OfflineBatchUserMismatchError) {
+            this.pipeline.shift();
+            continue;
+          }
           if (this.isPermanentError(error)) {
             this.onRemoteSuccess(error);
             const rejectResult = await this.localStore.rejectBatch(batch);
@@ -134,10 +154,18 @@ export class OfflineRemoteStore {
     }
   }
 
-  private async sendMutation(mutation: OfflineWriteMutation, transaction: { name: string; start: number; end: number }): Promise<unknown> {
-    const ref = new DocumentReference(this.db, mutation.key.path);
+  private async sendMutation(
+    batch: OfflineWriteBatch,
+    mutation: OfflineWriteMutation,
+    transaction: { name: string; start: number; end: number }
+  ): Promise<unknown> {
+    this.assertBatchUser(batch);
+    const ref = mutation.referenceType === 'dualityViewDocument'
+      ? new DualityViewDocReference(this.db, mutation.key.path)
+      : new DocumentReference(this.db, mutation.key.path);
     if (mutation.precondition.exists === false) {
       const current = await ref.get();
+      this.assertBatchUser(batch);
       if (current.exists()) {
         const error = new Error('Document already exists') as Error & { status?: number; code?: string };
         error.status = 409;
@@ -147,6 +175,7 @@ export class OfflineRemoteStore {
     }
 
     const request = this.serializer.toWriteRequest(mutation);
+    this.assertBatchUser(batch);
     switch (request.operation) {
       case 'set':
         return ref.set(
@@ -184,6 +213,16 @@ export class OfflineRemoteStore {
     const code = error?.code;
     if (typeof code !== 'string') return undefined;
     return code.includes('/') ? code.slice(code.lastIndexOf('/') + 1) : code;
+  }
+
+  private isBatchForCurrentUser(batch: OfflineWriteBatch): boolean {
+    return batch.userId === this.getCurrentUserId();
+  }
+
+  private assertBatchUser(batch: OfflineWriteBatch): void {
+    if (!this.isBatchForCurrentUser(batch)) {
+      throw new OfflineBatchUserMismatchError();
+    }
   }
 
   private scheduleRetry(): void {

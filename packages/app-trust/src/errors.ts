@@ -25,11 +25,37 @@
 //-----------------------------------------------------------------------------
 // 
 
+/**
+ * Error raised when an application-attestation operation cannot complete.
+ *
+ * @example
+ * ```ts
+ * try {
+ *   await getToken(appTrust);
+ * } catch (error) {
+ *   if (error instanceof FusabaseAppTrustError) console.error(error.code);
+ * }
+ * ```
+ */
 export class FusabaseAppTrustError extends Error {
+/** Describes the public `status` value. */
   status?: number;
+/** Describes the public `code` value. */
   code?: string;
+/** Describes the public `cause` value. */
   override cause?: unknown;
 
+  /**
+   * Creates an attestation-operation error.
+   *
+   * @param message - Human-readable explanation of the failure.
+   * @param opts - Optional status, stable error code, and underlying cause.
+   * @returns The error instance.
+   * @example
+   * ```ts
+   * throw new FusabaseAppTrustError("Token request failed", { status: 401 });
+   * ```
+   */
   constructor(message: string, opts?: { status?: number; code?: string; cause?: unknown }) {
     super(message);
     this.name = 'FusabaseAppTrustError';

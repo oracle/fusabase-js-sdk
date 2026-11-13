@@ -26,11 +26,11 @@
 // 
 
 /**
- * Controls the verbosity of SDK diagnostic output.
+ * Defines the verbosity used by SDK logging.
  *
  * @example
  * ```ts
- * setLogLevel(LogLevel.WARN);
+ * setLogLevel(LogLevel.DEBUG);
  * ```
  */
 export enum LogLevel {

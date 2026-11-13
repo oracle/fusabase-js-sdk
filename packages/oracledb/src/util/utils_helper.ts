@@ -34,8 +34,40 @@ import { escapeFieldName } from './utils.js';
 import { identifyValueType } from './utils.js';
 import { validateDenseVector, validateSparseEmbedding } from './utils.js';
 
-/* Sets the log level for all registered apps in the Fusabase environment.
- * @param log - The log level string to apply.
+/** Writes a dynamic key without invoking Object.prototype setters such as __proto__. */
+export function safeSetOwn(target: Record<string, any>, key: string, value: any): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
+/** Reads only an own data property; inherited properties are never document fields. */
+export function safeGetOwn(target: unknown, key: string): any {
+  return target != null && Object.prototype.hasOwnProperty.call(target, key)
+    ? (target as Record<string, any>)[key]
+    : undefined;
+}
+
+export function safeDeleteOwn(target: unknown, key: string): boolean {
+  if (target == null || !Object.prototype.hasOwnProperty.call(target, key)) return false;
+  return delete (target as Record<string, any>)[key];
+}
+
+/**
+ * Sets the log level for all registered OracleDB SDK apps.
+ *
+ * @param log - The log level to apply.
+ * @returns Nothing.
+ *
+ * @example
+ * ```ts
+ * import { LogLevel, setLogLevel } from "fusabase/oracledb";
+ *
+ * setLogLevel(LogLevel.DEBUG);
+ * ```
  */
 export function setLogLevel(log: LogLevel): void {
   for (let i = 0; i < fusabase.apps.length; i++) {
@@ -158,7 +190,7 @@ export function parseTimestamp(obj: any): any {
     const newObj: Record<string, any> = {};
     for (const key in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        newObj[key] = parseTimestamp(obj[key]);
+        safeSetOwn(newObj, key, parseTimestamp(obj[key]));
       }
     }
     return newObj;
@@ -191,7 +223,7 @@ export function parseTimeInDocument(obj: any): any {
     const newObj: Record<string, any> = {};
     for (const key in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        newObj[key] = parseTimeInDocument(obj[key]);
+        safeSetOwn(newObj, key, parseTimeInDocument(obj[key]));
       }
     }
     return newObj;
@@ -227,15 +259,15 @@ export function flattenUpdates(
       const beforeSize = Object.keys(result).length;
       flattenUpdates(value, path, result);
       if (Object.keys(value).length === 0) {
-        result[path] = {};
+        safeSetOwn(result, path, {});
       }
 
     } else {
-      result[path] = value;
+      safeSetOwn(result, path, value);
     }
   }
   if (!hasKeys && prefix) {
-    result[prefix] = {};
+    safeSetOwn(result, prefix, {});
   }
 
   return result;
@@ -253,7 +285,7 @@ export function updateNestedData(query: any, oldData: any, updates: any): any {
   // Flatten nested updates first
   const flatUpdates = flattenUpdates(updates);
 
-  for (let key in flatUpdates) {
+  for (let key of Object.keys(flatUpdates)) {
     const value = flatUpdates[key];
 
     if (key.includes("$FieldPath$")) {
@@ -278,7 +310,7 @@ export function setWholeData(query:any, oldData: any, updates: any, flag:any): a
 
   const flatUpdates = flattenUpdates(updates);
 
-  for (let key in flatUpdates) {
+  for (const key of Object.keys(flatUpdates)) {
     const value = flatUpdates[key];
 
     if (key.includes("$FieldPath$")) {
@@ -316,20 +348,22 @@ export function setNestedValue(
   for (let i = 0; i < pathArray.length - 1; i++) {
     const key = pathArray[i];
 
-    if (!(key in current) || typeof current[key] !== "object") {
-      current[key] = {};
+    const currentChild = safeGetOwn(current, key);
+    if (!currentChild || typeof currentChild !== "object" || Array.isArray(currentChild)) {
+      safeSetOwn(current, key, {});
     }
 
-    if (!(key in oldCurrent) || typeof oldCurrent[key] !== "object") {
-      oldCurrent[key] = {};
+    const oldChild = safeGetOwn(oldCurrent, key);
+    if (!oldChild || typeof oldChild !== "object" || Array.isArray(oldChild)) {
+      safeSetOwn(oldCurrent, key, {});
     }
 
-    current = current[key];
-    oldCurrent = oldCurrent[key];
+    current = safeGetOwn(current, key);
+    oldCurrent = safeGetOwn(oldCurrent, key);
   }
 
   const finalKey = pathArray[pathArray.length - 1];
-  let existingValue = oldCurrent[finalKey];
+  let existingValue = safeGetOwn(oldCurrent, finalKey);
   let sKey = finalKey;
   if (flag) {
     sKey = "";
@@ -342,17 +376,17 @@ export function setNestedValue(
 
   if (value instanceof FieldValue) {
     if (value.operation === "FieldValue:delete") {
-      delete current[finalKey];
+      safeDeleteOwn(current, finalKey);
       return ;
     }
     if (flag && value.operation === "FieldValue:serverTimestamp") {
         query._serverTimestamp.push(sKey);
     } else {
-        current[finalKey] = updateUsingFieldValue(finalKey, oldCurrent, value);
+        safeSetOwn(current, finalKey, updateUsingFieldValue(finalKey, oldCurrent, value));
     }
     
   } else {
-    current[finalKey] = value;
+    safeSetOwn(current, finalKey, value);
   }
 }
 
@@ -368,15 +402,16 @@ export function updateUsingFieldValue(
   fieldvalue: FieldValue
 ): string | Array<any> | null {
   let new_value = null;
+  const oldValue = safeGetOwn(old_data, key);
   let old_value = null;
   switch (fieldvalue.operation) {
 
     case "FieldValue:arrayRemove":
-      if (!Array.isArray(old_data[key])) {
+      if (!Array.isArray(oldValue)) {
         return [];
       }
       new_value = [];
-      old_value = old_data[key];
+      old_value = oldValue;
       try {
         for (let i = 0; i < old_value.length; i++) {
           if (!fieldvalue.value.includes(old_value[i])) {
@@ -390,11 +425,11 @@ export function updateUsingFieldValue(
       break;
 
     case "FieldValue:arrayUnion":
-      if (!Array.isArray(old_data[key] )) {
+      if (!Array.isArray(oldValue)) {
         new_value = fieldvalue.value;
         return new_value;
       }
-      old_value = old_data[key];
+      old_value = oldValue;
       new_value = old_value;
       for (let i = 0; i < fieldvalue.value.length; i++) {
         if (!new_value.includes(fieldvalue.value[i])) {
@@ -405,10 +440,10 @@ export function updateUsingFieldValue(
       break;
 
     case "FieldValue:increment":
-      if (!old_data[key] || !Number.isInteger(old_data[key])) {
+      if (!oldValue || !Number.isInteger(oldValue)) {
         new_value = fieldvalue.value;
       } else {   
-        new_value = old_data[key] + fieldvalue.value;
+        new_value = oldValue + fieldvalue.value;
       }
       break;
 
@@ -550,7 +585,7 @@ function extractEmbeddingOps(input: Record<string, any>): { setMap: Record<strin
       } else if (isSparseEmbeddingObject(value)) {
         validateSparseEmbedding(value);
       }
-      setMap[key] = value;
+      safeSetOwn(setMap, key, value);
     }
   }
 
@@ -589,7 +624,7 @@ export function createPayloadForUpdateVersion2New(
       result.push({ field: "$embeddings", value: deleteKeys, op: "delete", valueType: "arrayValue" });
     }
     input = Object.fromEntries(
-      Object.entries(input || {}).filter(([k, v]) => !(k in setMap) && !(v instanceof FieldValue && v.operation === "FieldValue:deleteVector"))
+      Object.entries(input || {}).filter(([k, v]) => !Object.prototype.hasOwnProperty.call(setMap, k) && !(v instanceof FieldValue && v.operation === "FieldValue:deleteVector"))
     );
   }
   const seenParents = new Set();
@@ -733,11 +768,11 @@ export function serializeVersion2(
       result.push({ field: "$embeddings", value: deleteKeys, op: "delete", valueType: "arrayValue" });
     }
     input = Object.fromEntries(
-      Object.entries(input || {}).filter(([k, v]) => !(k in setMap) && !(v instanceof FieldValue && v.operation === "FieldValue:deleteVector"))
+      Object.entries(input || {}).filter(([k, v]) => !Object.prototype.hasOwnProperty.call(setMap, k) && !(v instanceof FieldValue && v.operation === "FieldValue:deleteVector"))
     );
   }
 
-  for (const key in input) {
+  for (const key of Object.keys(input)) {
     const value = input[key];
     let fullKey = parentKey ? `${parentKey}.${key}` : key;
 
@@ -807,7 +842,7 @@ export function serializeVersion2(
       const normalFields: Record<string, any> = {};
       const specialFields = [];
 
-      for (const innerKey in value) {
+      for (const innerKey of Object.keys(value)) {
         const innerValue = value[innerKey];
         if (innerValue instanceof FieldValue) {
           let op = innerValue.operation.replace('FieldValue:', '');
@@ -825,7 +860,7 @@ export function serializeVersion2(
             valueType: identifyValueType(val)
           });
         } else {
-          normalFields[innerKey] = innerValue;
+          safeSetOwn(normalFields, innerKey, innerValue);
         }
       }
 
@@ -852,4 +887,3 @@ export function serializeVersion2(
 
   return result;
 }
-

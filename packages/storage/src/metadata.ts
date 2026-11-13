@@ -32,40 +32,32 @@ import type { FullMetadata } from "./types.js";
 /**
  * Gets the download URL for the given reference.
  * @param ref - The StorageReference to get the download URL for.
+ * @param timeExpires - Optional expiry time as a Date or date-time string.
  * @returns A promise that resolves with the download URL.
- */
-/**
- * Gets a URL that can be used to download an object.
- *
- * @param ref - The reference to the object.
- * @returns A promise resolving to the download URL.
  * @example
  * ```ts
- * const url = await getDownloadURL(avatar);
+ * const url = await getDownloadURL(fileRef);
  * ```
  */
-export async function getDownloadURL(ref: StorageReference): Promise<string> {
+export async function getDownloadURL(
+  ref: StorageReference,
+  timeExpires?: Date | string
+): Promise<string> {
   if (!(ref instanceof StorageReference)) {
     let error = new StorageError(StorageErrorCode.INVALID_ARGUMENT, getStorageErrorMessage('INVALID_REFERENCE'));
     error.status = 400;
     throw storageErrorHandler(error);
   }
-  return ref.getDownloadURL();
+  return ref.getDownloadURL(timeExpires);
 }
 
 /**
  * Gets the metadata for the given reference.
  * @param ref - The StorageReference to get metadata for.
  * @returns A promise that resolves with the metadata object.
- */
-/**
- * Gets metadata for an object.
- *
- * @param ref - The reference to the object.
- * @returns A promise resolving to the object's full metadata.
  * @example
  * ```ts
- * const metadata = await getMetadata(avatar);
+ * const metadata = await getMetadata(fileRef);
  * ```
  */
 export async function getMetadata(ref: StorageReference): Promise<FullMetadata> {

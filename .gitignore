@@ -1,12 +1,12 @@
 node_modules
-.env
 dist
 docs
 .vscode
 *.tgz
 /test/test_misc.js
 /test/video
+/test/logs/
 package-lock.json
-
-# Do not commit app-trust package tests
-packages/app-trust/test/
+.env
+collection.env
+relational.env

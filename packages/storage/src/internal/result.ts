@@ -23,10 +23,16 @@
 // limitations under the License.
 //
 //-----------------------------------------------------------------------------
-// 
+//
 
 /**
  * Class representing the result of a list operation.
+ *
+ * @example
+ * ```ts
+ * const result = await list(fileRef);
+ * console.log(result.items);
+ * ```
  */
 export class ListResult {
   /** Array of items (files/references) in the list. */
@@ -36,10 +42,18 @@ export class ListResult {
   /** Array of prefixes (directories) in the list. */
   prefixes: any[];
 
-  /**
-   * Constructs a ListResult.
-   * @param data - The data containing items, prefixes, and nextPageToken.
-   */
+/**
+ * Constructs a ListResult instance with the supplied configuration.
+ *
+ * @param data - The document or request data to write.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { ListResult } from "fusabase/storage";
+ * const result = new ListResult({ title: "Example" });
+ * void result;
+ * ```
+ */
   constructor(data: { items: any[]; prefixes: any[]; nextPageToken: string | null }) {
     this.items = data.items;
     this.prefixes = data.prefixes;

@@ -29,25 +29,16 @@ import { App } from "fusabase/app";
 
 
 /**
- * Initializes Oracledb for the given app with the provided settings and optional database ID.
+ * Initializes Oracledb for the given app with the provided settings.
  * Returns a Oracledb instance.
  */
 export declare function initializeOracledb(
   app: App,
-  settings?: OracledbSettings,
-  databaseId?: string
+  settings?: OracledbSettings
 ): oracledb;
 
 /**
- * Returns a Oracledb instance for the given app and database ID.
+ * Returns a Oracledb instance for the given app.
  * @param app - The app instance.
- * @param databaseId - The Oracledb database ID.
  */
-export declare function getOracledb(app: App, databaseId: string): oracledb;
-
-/**
- * Returns a Oracledb instance for the given app and database ID.
- * @param app - The app instance.
- * @param databaseId - The Oracledb database ID.
- */
-export declare function getOracledb(app: App): oracledb;
+export declare function getOracledb(app?: App): oracledb;

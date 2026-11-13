@@ -38,6 +38,9 @@ import {
 /**
  * Creates a dense embedding payload.
  *
+ * @param values - Numeric dimensions of the embedding.
+ * @returns The dense embedding payload.
+ *
  * @example
  * await updateDoc(docRef, {
  *   DENSE_EMB: denseVector([0.12, -0.91, 0.44])
@@ -49,16 +52,6 @@ import {
  *   DENSE_EMB: denseVector([0.12, -0.91, 0.44])
  * });
  */
-/**
- * Creates a dense vector value for a vector field.
- *
- * @param values - Numeric values in vector order.
- * @returns A dense embedding value.
- * @example
- * ```ts
- * await setDoc(item, { embedding: denseVector([0.1, 0.2, 0.3]) });
- * ```
- */
 export function denseVector(values: number[]): DenseEmbedding {
   validateDenseVector(values, "denseVector values must be a numeric array.");
   return { type: "dense", values };
@@ -66,6 +59,11 @@ export function denseVector(values: number[]): DenseEmbedding {
 
 /**
  * Creates a sparse embedding payload.
+ *
+ * @param dimension - Total number of embedding dimensions.
+ * @param indices - Non-zero dimension indices.
+ * @param values - Values corresponding to `indices`.
+ * @returns The sparse embedding payload.
  *
  * @example
  * await updateDoc(docRef, {
@@ -77,18 +75,6 @@ export function denseVector(values: number[]): DenseEmbedding {
  *   title: "sparse vector doc",
  *   SPARSE_EMB: sparseVector(1000, [3, 40, 777], [0.5, 0.8, 0.33])
  * });
- */
-/**
- * Creates a sparse vector value for a vector field.
- *
- * @param dimension - The total vector dimension.
- * @param indices - Positions of non-zero values.
- * @param values - Values corresponding to `indices`.
- * @returns A sparse embedding value.
- * @example
- * ```ts
- * const embedding = sparseVector(100, [4, 20], [0.7, 0.2]);
- * ```
  */
 export function sparseVector(
   dimension: number,
@@ -102,19 +88,12 @@ export function sparseVector(
 /**
  * Creates a sentinel that deletes an embedding key from `$embeddings` in v2.
  *
+ * @returns An embedding-deletion sentinel value.
+ *
  * @example
  * await updateDoc(docRef, {
  *   LEGACY_EMB: deleteVector()
  * });
- */
-/**
- * Creates a sentinel that removes a vector field.
- *
- * @returns A field-value sentinel.
- * @example
- * ```ts
- * await updateDoc(item, { embedding: deleteVector() });
- * ```
  */
 export function deleteVector(): FieldValue {
   return new FieldValue("FieldValue:deleteVector", null);

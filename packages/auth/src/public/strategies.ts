@@ -28,8 +28,7 @@
 import { User } from '../types/user.js';
 import { UserCredential, AuthCredential } from '../internal/credential.js';
 import { AuthProvider } from '../providers/provider.js';
-import { PopupRedirectResolver, ApplicationVerifier } from '../types/auth.js';
-import { Auth } from '../types/auth.js';
+import { PopupRedirectResolver, ApplicationVerifier, Auth, hasEquivalentAuthAppConfig } from '../types/auth.js';
 import { ActionCodeSettings } from '../types/action-code.js';
 import { authErrorHandler,argCheck,typeStrings, AuthError, ErrorCodeMessage } from '../errors.js';
 import { ConfirmationResult } from '../types/user.js';
@@ -78,15 +77,16 @@ export function signInWithCustomToken(
 }
 
 /**
- * Signs in a user with the given AuthCredential.
+ * Executes the signInWithCredential operation for this public SDK type.
  *
+ * @param auth - The Auth instance for this operation.
+ * @param credential - The credential to attach or convert.
+ * @returns The result produced by `signInWithCredential`, including any requested data or handle.
  * @example
  * ```ts
- * import { getAuth, signInWithCredential, GoogleAuthProvider } from 'fusabase/auth';
- *
- * const auth = getAuth();
- * const credential = GoogleAuthProvider.credential(idToken);
- * const userCredential = await signInWithCredential(auth, credential);
+ * import { signInWithCredential } from "fusabase/auth";
+ * const result = signInWithCredential(value, value);
+ * void result;
  * ```
  */
 export function signInWithCredential(
@@ -97,15 +97,17 @@ export function signInWithCredential(
 }
 
 /**
- * Signs in a user using an OAuth provider via a popup window.
+ * Executes the signInWithPopup operation for this public SDK type.
  *
+ * @param auth - The Auth instance for this operation.
+ * @param provider - The authentication provider to use.
+ * @param resolver - The resolver accepted by this operation.
+ * @returns The result produced by `signInWithPopup`, including any requested data or handle.
  * @example
  * ```ts
- * import { getAuth, signInWithPopup, GoogleAuthProvider } from 'fusabase/auth';
- *
- * const auth = getAuth();
- * const provider = new GoogleAuthProvider();
- * const userCredential = await signInWithPopup(auth, provider);
+ * import { signInWithPopup } from "fusabase/auth";
+ * const result = signInWithPopup(value, value, value);
+ * void result;
  * ```
  */
 export function signInWithPopup(
@@ -122,15 +124,17 @@ export function signInWithPopup(
 }
 
 /**
- * Signs in a user using an OAuth provider via full-page redirect.
+ * Executes the signInWithRedirect operation for this public SDK type.
  *
+ * @param auth - The Auth instance for this operation.
+ * @param provider - The authentication provider to use.
+ * @param resolver - The resolver accepted by this operation.
+ * @returns The result produced by `signInWithRedirect`, including any requested data or handle.
  * @example
  * ```ts
- * import { getAuth, signInWithRedirect, GoogleAuthProvider } from 'fusabase/auth';
- *
- * const auth = getAuth();
- * const provider = new GoogleAuthProvider();
- * await signInWithRedirect(auth, provider);
+ * import { signInWithRedirect } from "fusabase/auth";
+ * const result = signInWithRedirect(value, value, value);
+ * void result;
  * ```
  */
 export function signInWithRedirect(
@@ -147,14 +151,17 @@ export function signInWithRedirect(
 }
 
 /**
- * Signs in using email and password.
+ * Executes the signInWithEmailAndPassword operation for this public SDK type.
  *
+ * @param auth - The Auth instance for this operation.
+ * @param email - The account email address.
+ * @param password - The account password.
+ * @returns The result produced by `signInWithEmailAndPassword`, including any requested data or handle.
  * @example
  * ```ts
- * import { getAuth, signInWithEmailAndPassword } from 'fusabase/auth';
- *
- * const auth = getAuth();
- * const userCredential = await signInWithEmailAndPassword(auth, 'user@example.com', 'password123');
+ * import { signInWithEmailAndPassword } from "fusabase/auth";
+ * const result = signInWithEmailAndPassword(value, "user@example.com", "correct-horse-battery-staple");
+ * void result;
  * ```
  */
 export function signInWithEmailAndPassword(
@@ -277,13 +284,16 @@ export function signInWithEmailAndPassword(
 
 
 /**
- * Sets the provided user as the current user.
+ * Executes the updateCurrentUser operation for this public SDK type.
  *
+ * @param auth - The Auth instance for this operation.
+ * @param user - The user accepted by this operation.
+ * @returns The result produced by `updateCurrentUser`, including any requested data or handle.
  * @example
  * ```ts
- * import { updateCurrentUser } from 'fusabase/auth';
- *
- * await updateCurrentUser(auth, user);
+ * import { updateCurrentUser } from "fusabase/auth";
+ * const result = updateCurrentUser(value, value);
+ * void result;
  * ```
  */
 export async function updateCurrentUser(
@@ -295,18 +305,27 @@ export async function updateCurrentUser(
         error.status = 400;
         throw authErrorHandler(error);
     }
+    if (user && user instanceof User && !hasEquivalentAuthAppConfig(user.auth, auth)) {
+      const error = new AuthError(
+        ErrorCodeMessage.INVALID_ARGS,
+        new Error("User belongs to an Auth instance with a different app configuration")
+      );
+      error.status = 400;
+      throw authErrorHandler(error);
+    }
     await auth.updateCurrentUser(user);
 }
 
 /**
- * Signs out the current user.
+ * Executes the signOut operation for this public SDK type.
  *
+ * @param auth - The Auth instance for this operation.
+ * @returns The result produced by `signOut`, including any requested data or handle.
  * @example
  * ```ts
- * import { getAuth, signOut } from 'fusabase/auth';
- *
- * const auth = getAuth();
- * await signOut(auth);
+ * import { signOut } from "fusabase/auth";
+ * const result = signOut(value);
+ * void result;
  * ```
  */
 export function signOut(auth: Auth): Promise<void> {

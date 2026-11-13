@@ -28,9 +28,10 @@
 import { createUniqueName,oracledbErrorHandler,argCheck,typeStrings,Utils} from "../util/utils.js";
 import { DocumentData } from "../types/common.js";
 import { DocumentSnapshot } from "../document/snapshot.js";
-import { DocumentReference } from "../document/reference.js";
+import { DocumentReference, DualityViewDocReference } from "../document/reference.js";
 import { UpdateData } from "../types/common.js";
 import { FieldPath } from "../field/path.js";
+import { safeSetOwn } from "../util/utils_helper.js";
 import { LogLevel } from "../../../logger/LogLevel.js";
 import { SetOptions } from "../types/common.js";
 import { WithFieldValue } from "../types/data.js";
@@ -48,16 +49,25 @@ import {
   _writeLocallyIfEnabled,
 } from "../public/offline.js";
 
+/** Represents an atomic read-and-write transaction. @example `await runTransaction(database, async tx => tx.get(taskRef));` */
 export class Transaction {
   #name: string | null = null;
   #status: number | null = null;
   #operations: any[] = [];
   #versions: Record<string, any> = {};
 
-  /**
-   * Creates a new Transaction instance.
-   * @param name - Optional name for the transaction. If not provided, a unique name is generated.
-   */
+/**
+ * Constructs a Transaction instance with the supplied configuration.
+ *
+ * @param name - Optional name used to identify the resource.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Transaction } from "fusabase/oracledb";
+ * const result = new Transaction("example");
+ * void result;
+ * ```
+ */
   constructor(name?: string) {
     this.#status = 0;
     this.#name = name ?? createUniqueName();
@@ -70,13 +80,18 @@ export class Transaction {
     this.#versions = {};
   }
 
-  /**
-   * Reads a document in the context of this transaction.
-   * @template AppModelType - The type of the application model.
-   * @template DbModelType - The type of the database model, extending DocumentData.
-   * @param docRef - The document reference to read.
-   * @returns A promise that resolves to the document snapshot.
-   */
+/**
+ * Executes the get operation for this public SDK type.
+ *
+ * @param docRef - The document reference to read or modify.
+ * @returns The result produced by `get`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Transaction } from "fusabase/oracledb";
+ * const result = get(value);
+ * void result;
+ * ```
+ */
   async get<AppModelType, DbModelType extends DocumentData>(docRef: DocumentReference<AppModelType, DbModelType>): Promise<DocumentSnapshot<AppModelType, DbModelType>> {
     if (this.#status === -1) {
       const err = new Error('Transaction has ended!') as Error & { status?: number };
@@ -104,13 +119,18 @@ export class Transaction {
     return res as any;
   }
 
-  /**
-   * Queues a delete operation in this transaction.
-   * @template AppModelType - The type of the application model.
-   * @template DbModelType - The type of the database model, extending DocumentData.
-   * @param docRef - The document reference to delete.
-   * @returns This Transaction instance for chaining.
-   */
+/**
+ * Executes the delete operation for this public SDK type.
+ *
+ * @param docRef - The document reference to read or modify.
+ * @returns The result produced by `delete`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Transaction } from "fusabase/oracledb";
+ * const result = delete(value);
+ * void result;
+ * ```
+ */
   delete<AppModelType, DbModelType extends DocumentData>(
     docRef: DocumentReference<AppModelType, DbModelType>
   ): Transaction {
@@ -133,15 +153,20 @@ export class Transaction {
     return this;
   }
 
-  /**
-   * Queues a set operation in this transaction.
-   * @template AppModelType - The type of the application model.
-   * @template DbModelType - The type of the database model, extending DocumentData.
-   * @param docRef - The document reference to set.
-   * @param data - The data to set on the document.
-   * @param options - Options for the set operation.
-   * @returns This Transaction instance for chaining.
-   */
+/**
+ * Executes the set operation for this public SDK type.
+ *
+ * @param docRef - The document reference to read or modify.
+ * @param data - The document or request data to write.
+ * @param options - Optional settings that change this operation.
+ * @returns The result produced by `set`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Transaction } from "fusabase/oracledb";
+ * const result = set(value, { title: "Example" }, value);
+ * void result;
+ * ```
+ */
   set<AppModelType, DbModelType extends DocumentData>(
     docRef: DocumentReference<AppModelType, DbModelType>,
     data: Partial<AppModelType> | WithFieldValue<AppModelType>,
@@ -173,14 +198,19 @@ export class Transaction {
     return this;
   }
 
-  /**
-   * Updates fields in a document within this transaction.
-   * @template AppModelType - The type of the application model.
-   * @template DbModelType - The type of the database model, extending DocumentData.
-   * @param docRef - The document reference to update.
-   * @param data - An object containing the fields and values to update.
-   * @returns This Transaction instance for chaining.
-   */
+/**
+ * Executes the update operation for this public SDK type.
+ *
+ * @param docRef - The document reference to read or modify.
+ * @param data - The document or request data to write.
+ * @returns The result produced by `update`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Transaction } from "fusabase/oracledb";
+ * const result = update(value, { title: "Example" });
+ * void result;
+ * ```
+ */
   update<AppModelType, DbModelType extends DocumentData>(docRef:
     DocumentReference<AppModelType, DbModelType>,
     data: UpdateData<DbModelType>) : Transaction;
@@ -221,24 +251,20 @@ export class Transaction {
         const fieldKey = key instanceof FieldPath
           ? (key as FieldPath).fullPathSec
           : key;
-        data[fieldKey] = val;
+        safeSetOwn(data, fieldKey, val);
       });
     } else {
       // Field/value pairs: update(docRef, field, value, ...)
       data = {};
-      data[
-        dataOrField instanceof FieldPath
-          ? dataOrField.fullPathSec
-          : (dataOrField as string)
-      ] = value;
+      safeSetOwn(
+        data,
+        dataOrField instanceof FieldPath ? dataOrField.fullPathSec : dataOrField as string,
+        value
+      );
       for (let i = 0; i < moreFieldsAndValues.length; i += 2) {
         const field = moreFieldsAndValues[i];
         const val = moreFieldsAndValues[i + 1];
-        data[
-          field instanceof FieldPath
-            ? field.fullPathSec
-            : (field as string)
-        ] = val;
+        safeSetOwn(data, field instanceof FieldPath ? field.fullPathSec : field as string, val);
       }
     }
     if (!(docRef instanceof DocumentReference)) {
@@ -352,29 +378,44 @@ export class Transaction {
 
 
 
+/** Represents a group of writes committed atomically. @example `const batch = writeBatch(database);` */
 export class WriteBatch {
   #name: string | null = null;
   #status: number | null = null;
   #operations: any[] = [];
 
-  /**
-   * Creates a new WriteBatch instance.
-   * @param name - Optional name for the write batch.
-   */
+/**
+ * Constructs a WriteBatch instance with the supplied configuration.
+ *
+ * @param name - Optional name used to identify the resource.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { WriteBatch } from "fusabase/oracledb";
+ * const result = new WriteBatch("example");
+ * void result;
+ * ```
+ */
   constructor(name?: string) {
     this.#status = 0;
     this.#name = name || null;
   }
 
-  /**
-   * Queues a set operation in this WriteBatch.
-   * @template T - The type of the document data.
-   * @param docRef - The document reference to set.
-   * @param data - The data to set on the document.
-   * @returns This WriteBatch instance for chaining.
-   */
-  set<T>(docRef: DocumentReference<T>, data: WithFieldValue<T>): WriteBatch {
-    if (!(docRef instanceof DocumentReference)) {
+/**
+ * Executes the set operation for this public SDK type.
+ *
+ * @param docRef - The document reference to read or modify.
+ * @param data - The document or request data to write.
+ * @returns The result produced by `set`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { WriteBatch } from "fusabase/oracledb";
+ * const result = set(value, { title: "Example" });
+ * void result;
+ * ```
+ */
+  set<T>(docRef: DocumentReference<T> | DualityViewDocReference<T>, data: WithFieldValue<T>): WriteBatch {
+    if (!(docRef instanceof DocumentReference) && !(docRef instanceof DualityViewDocReference)) {
       const error = new Error("Invalid document reference passed") as Error & { status?: number };
       error.status = 400;
       throw oracledbErrorHandler(error);
@@ -390,32 +431,37 @@ export class WriteBatch {
     return this;
   }
 
-  /**
-   * Updates fields in a document within this WriteBatch.
-   * @template AppModelType - The type of the application model.
-   * @template DbModelType - The type of the database model, extending DocumentData.
-   * @param docRef - The document reference to update.
-   * @param data - An object containing the fields and values to update.
-   * @returns This WriteBatch instance for chaining.
-   */
+/**
+ * Executes the update operation for this public SDK type.
+ *
+ * @param documentRef - The document reference to read or modify.
+ * @param data - The document or request data to write.
+ * @returns The result produced by `update`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { WriteBatch } from "fusabase/oracledb";
+ * const result = update(value, { title: "Example" });
+ * void result;
+ * ```
+ */
 update<AppModelType, DbModelType extends DocumentData>(documentRef:
-  DocumentReference<AppModelType, DbModelType>,
+  DocumentReference<AppModelType, DbModelType> | DualityViewDocReference<AppModelType, DbModelType>,
   data: UpdateData<DbModelType>): WriteBatch;
   /**
    * Updates fields in a document within this WriteBatch using field/value pairs.
    * @template AppModelType - The type of the application model.
    * @template DbModelType - The type of the database model, extending DocumentData.
-   * @param docRef - The document reference to update.
+   * @param documentRef - The document reference to update.
    * @param field - The field to update (string or FieldPath).
    * @param value - The value to set for the field.
    * @param moreFieldsAndValues - Additional field/value pairs.
    * @returns This WriteBatch instance for chaining.
    */
 update<AppModelType, DbModelType extends DocumentData>(documentRef:
-  DocumentReference<AppModelType, DbModelType>, field: string | FieldPath,
+  DocumentReference<AppModelType, DbModelType> | DualityViewDocReference<AppModelType, DbModelType>, field: string | FieldPath,
   value: unknown, ...moreFieldsAndValues: unknown[]): WriteBatch;
 update<AppModelType, DbModelType extends DocumentData>(
-  docRef: DocumentReference<AppModelType, DbModelType>,
+  docRef: DocumentReference<AppModelType, DbModelType> | DualityViewDocReference<AppModelType, DbModelType>,
   dataOrField: UpdateData<DbModelType> | string | FieldPath,
   value?: unknown,
   ...moreFieldsAndValues: unknown[]
@@ -430,19 +476,19 @@ update<AppModelType, DbModelType extends DocumentData>(
       const objectData = dataOrField as Record<string, unknown>;
       data = {};
       (Object.entries(objectData) as [string | FieldPath, any][]).forEach(([key, val]) => {
-        data[key instanceof FieldPath ? key.fullPathSec : key] = val;
+        safeSetOwn(data, key instanceof FieldPath ? key.fullPathSec : key, val);
       });
     } else {
       // Field/value pairs: update(docRef, field, value, ...)
       data = {};
-      data[dataOrField instanceof FieldPath ? dataOrField.fullPathSec : dataOrField as string] = value;
+      safeSetOwn(data, dataOrField instanceof FieldPath ? dataOrField.fullPathSec : dataOrField as string, value);
       for (let i = 0; i < moreFieldsAndValues.length; i += 2) {
         const field = moreFieldsAndValues[i];
         const val = moreFieldsAndValues[i + 1];
-        data[field instanceof FieldPath ? field.fullPathSec : field as string] = val;
+        safeSetOwn(data, field instanceof FieldPath ? field.fullPathSec : field as string, val);
       }
     }
-    if (!(docRef instanceof DocumentReference)) {
+    if (!(docRef instanceof DocumentReference) && !(docRef instanceof DualityViewDocReference)) {
       const error = new Error("Invalid document reference passed") as Error & { status?: number };
       error.status = 400;
       throw oracledbErrorHandler(error);
@@ -456,14 +502,20 @@ update<AppModelType, DbModelType extends DocumentData>(
     return this;
   }
 
-  /**
-   * Queues a delete operation in this WriteBatch.
-   * @template T - The type of the document data.
-   * @param docRef - The document reference to delete.
-   * @returns This WriteBatch instance for chaining.
-   */
-  delete<T>(docRef: DocumentReference<T>): WriteBatch {
-    if (!(docRef instanceof DocumentReference)) {
+/**
+ * Executes the delete operation for this public SDK type.
+ *
+ * @param docRef - The document reference to read or modify.
+ * @returns The result produced by `delete`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { WriteBatch } from "fusabase/oracledb";
+ * const result = delete(value);
+ * void result;
+ * ```
+ */
+  delete<T>(docRef: DocumentReference<T> | DualityViewDocReference<T>): WriteBatch {
+    if (!(docRef instanceof DocumentReference) && !(docRef instanceof DualityViewDocReference)) {
       const error = new Error("Invalid document reference passed") as Error & { status?: number };
       error.status = 400;
       throw oracledbErrorHandler(error);
@@ -519,14 +571,21 @@ update<AppModelType, DbModelType extends DocumentData>(
     return j;
   }
 
-  /**
-   * Commits all the writes in this WriteBatch as a single atomic operation.
-   * @returns A promise that resolves when the commit is complete.
-   */
+/**
+ * Executes the commit operation for this public SDK type.
+ *
+ * @returns The result produced by `commit`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { WriteBatch } from "fusabase/oracledb";
+ * const result = client.commit();
+ * void result;
+ * ```
+ */
   async commit(): Promise<void> {
     if (this.#operations.length > 0) {
       const firstRef = this.#operations[0].docRef;
-      if (firstRef instanceof DocumentReference && _isOfflineEnabled(firstRef.oracledb)) {
+      if ((firstRef instanceof DocumentReference || firstRef instanceof DualityViewDocReference) && _isOfflineEnabled(firstRef.oracledb)) {
         for (const operation of this.#operations) {
           const options = operation.setOptions ?? operation.options ?? {};
           if (operation.method === "update" ||
@@ -575,6 +634,9 @@ async function queueOperationsLocally(db: any, operations: any[]): Promise<void>
 
 function operationToOfflineMutation(operation: any): OfflineSetWrite | OfflinePatchWrite | OfflineDeleteWrite {
   const key = OracledbDocumentKey.fromPath(operation.docRef.path);
+  const referenceType = operation.docRef instanceof DualityViewDocReference
+    ? 'dualityViewDocument' as const
+    : 'document' as const;
   switch (operation.method) {
     case "set": {
       const data = operation.docRef.converter
@@ -586,13 +648,17 @@ function operationToOfflineMutation(operation: any): OfflineSetWrite | OfflinePa
           key,
           data,
           options.mergeFields?.length ? options.mergeFields : Object.keys(data),
-          OracledbWritePrecondition.exists(true)
+          OracledbWritePrecondition.exists(true),
+          [],
+          referenceType
         );
       }
       return new OfflineSetWrite(
         key,
         data,
-        OracledbWritePrecondition.none()
+        OracledbWritePrecondition.none(),
+        [],
+        referenceType
       );
     }
     case "update":
@@ -600,12 +666,16 @@ function operationToOfflineMutation(operation: any): OfflineSetWrite | OfflinePa
         key,
         operation.data,
         Object.keys(operation.data),
-        OracledbWritePrecondition.exists(true)
+        OracledbWritePrecondition.exists(true),
+        [],
+        referenceType
       );
     case "delete":
       return new OfflineDeleteWrite(
         key,
-        OracledbWritePrecondition.none()
+        OracledbWritePrecondition.none(),
+        [],
+        referenceType
       );
     default:
       throw new Error("Unsupported write operation");

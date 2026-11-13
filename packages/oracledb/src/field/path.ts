@@ -30,6 +30,7 @@ import { oracledbErrorHandler } from "../util/utils.js";
 /**
  * Class representing a path to a field (including deeply nested fields).
  */
+/** Represents a field path in a document. @example `const path = new FieldPath("profile", "name");` */
 export class FieldPath {
   /**
    * (Private) Path string representing the field (i.e. "a.b.c").
@@ -47,10 +48,18 @@ export class FieldPath {
    */
   fullPathSec: string;
 
-  /**
-   * Creates a new `FieldPath` instance.
-   * @param {...string[]} arr - Array of path tokens.
-   */
+/**
+ * Constructs a FieldPath instance with the supplied configuration.
+ *
+ * @param fieldNames - The fieldNames accepted by this operation.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { FieldPath } from "fusabase/oracledb";
+ * const result = new FieldPath("example");
+ * void result;
+ * ```
+ */
   constructor(...fieldNames: string[]) {
     nullCheck(fieldNames, "Invalid argument passed");
     let path = "";
@@ -78,12 +87,18 @@ export class FieldPath {
     return this.#fullPath;
   }
 
-  /**
-   * Checks whether this `FieldPath` is equal to the provided one.
-   * @param {FieldPath} fp - FieldPath to compare to.
-   * @returns {boolean} Returns true if both point to the same field.
-   * @throws {Error} Throws if fp is not a FieldPath instance.
-   */
+/**
+ * Executes the isEqual operation for this public SDK type.
+ *
+ * @param fp - The fp accepted by this operation.
+ * @returns The result produced by `isEqual`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { FieldPath } from "fusabase/oracledb";
+ * const result = new FieldPath("status").isEqual(new FieldPath("status"));
+ * void result;
+ * ```
+ */
   isEqual(fp: FieldPath): boolean {
     if (!(fp instanceof FieldPath)) {
       const error: any = new Error("The other instance to be compared should be a FieldPath.");
@@ -93,10 +108,17 @@ export class FieldPath {
     return this.fullPathSec === fp.fullPathSec;
   }
 
-  /**
-   * Get the path string pointing to the field.
-   * @returns {string} The path string.
-   */
+/**
+ * Executes the toString operation for this public SDK type.
+ *
+ * @returns The result produced by `toString`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { FieldPath } from "fusabase/oracledb";
+ * const result = new FieldPath("status", "done").toString();
+ * void result;
+ * ```
+ */
   toString(): string {
     return this.fullPathSec;
   }
@@ -112,10 +134,17 @@ export class FieldPath {
     return this.toString();
   }
 
-  /**
-   * Creates a `FieldPath` instance for document ID.
-   * @returns {FieldPath} A new FieldPath instance.
-   */
+/**
+ * Executes the documentId operation for this public SDK type.
+ *
+ * @returns The result produced by `documentId`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { FieldPath } from "fusabase/oracledb";
+ * const result = FieldPath.documentId();
+ * void result;
+ * ```
+ */
   static documentId(): FieldPath {
     return new FieldPath("OID");
   }

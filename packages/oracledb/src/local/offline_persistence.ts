@@ -48,6 +48,7 @@ import {
 import { FieldValue } from '../field/value.js';
 
 const TARGET_GLOBALS_KEY = 'target_global_metadata';
+const BATCH_ID_ALLOCATOR_KEY = 'mutation_batch_id_allocator';
 const KEY_SEPARATOR = '\u0001';
 
 type PersistenceSnapshot = {
@@ -154,6 +155,12 @@ export class OfflineMemoryPersistence implements OfflinePersistence {
 
   async setMutationBatch(batch: OfflineWriteBatch): Promise<void> {
     this.mutationBatches.set(batch.batchId, batch);
+  }
+
+  async allocateBatchId(): Promise<number> {
+    const batchId = this.nextBatchId;
+    this.nextBatchId += 1;
+    return batchId;
   }
 
   async removeMutationBatch(batchId: number): Promise<void> {
@@ -370,6 +377,34 @@ export class OfflineIndexedDbPersistence implements OfflinePersistence {
         store.put(this.serializeMutationBatch(batch))
       );
     });
+  }
+
+  async allocateBatchId(): Promise<number> {
+    return this.withDb(db => new Promise<number>((resolve, reject) => {
+      const transaction = db.transaction(this.targetGlobalsStoreName, 'readwrite');
+      const store = transaction.objectStore(this.targetGlobalsStoreName);
+      let batchId = 0;
+      const request = store.get(BATCH_ID_ALLOCATOR_KEY);
+
+      request.onsuccess = () => {
+        const persistedNextBatchId = Number(request.result?.nextBatchId);
+        batchId = Number.isSafeInteger(persistedNextBatchId) && persistedNextBatchId > 0
+          ? persistedNextBatchId
+          : Math.max(1, this.nextBatchId);
+        const putRequest = store.put({
+          key: BATCH_ID_ALLOCATOR_KEY,
+          nextBatchId: batchId + 1,
+        });
+        putRequest.onerror = () => reject(putRequest.error ?? new Error('Failed to reserve offline batch ID'));
+      };
+      request.onerror = () => reject(request.error ?? new Error('Failed to reserve offline batch ID'));
+      transaction.oncomplete = () => {
+        this.nextBatchId = Math.max(this.nextBatchId, batchId + 1);
+        resolve(batchId);
+      };
+      transaction.onerror = () => reject(transaction.error ?? new Error('Failed to reserve offline batch ID'));
+      transaction.onabort = () => reject(transaction.error ?? new Error('Offline batch ID reservation was aborted'));
+    }));
   }
 
   async removeMutationBatch(batchId: number, userId = 'anonymous'): Promise<void> {
@@ -899,6 +934,7 @@ export class OfflineIndexedDbPersistence implements OfflinePersistence {
       fields: this.serializeValue((mutation as any).data),
       fieldMask: (mutation as any).fieldMask?.map((field: any) => String(field)),
       fieldTransforms: mutation.fieldTransforms,
+      referenceType: mutation.referenceType,
     };
   }
 
@@ -910,13 +946,13 @@ export class OfflineIndexedDbPersistence implements OfflinePersistence {
     switch (record.type) {
       case 'set':
       case 'SetMutation':
-        return new OfflineSetWrite(key, this.deserializeValue(record.data ?? record.fields ?? {}), precondition, record.fieldTransforms ?? []);
+        return new OfflineSetWrite(key, this.deserializeValue(record.data ?? record.fields ?? {}), precondition, record.fieldTransforms ?? [], record.referenceType);
       case 'patch':
       case 'PatchMutation':
-        return new OfflinePatchWrite(key, this.deserializeValue(record.data ?? record.fields ?? {}), record.fieldMask ?? [], precondition, record.fieldTransforms ?? []);
+        return new OfflinePatchWrite(key, this.deserializeValue(record.data ?? record.fields ?? {}), record.fieldMask ?? [], precondition, record.fieldTransforms ?? [], record.referenceType);
       case 'delete':
       case 'DeleteMutation':
-        return new OfflineDeleteWrite(key, precondition, record.fieldTransforms ?? []);
+        return new OfflineDeleteWrite(key, precondition, record.fieldTransforms ?? [], record.referenceType);
       default:
         throw new Error(`Unsupported offline mutation type ${record.type}`);
     }
@@ -962,11 +998,13 @@ export class OfflineIndexedDbPersistence implements OfflinePersistence {
       canonicalQuery: target.canonicalQuery,
       canonicalId: target.canonicalId ?? target.canonicalQuery,
       targetType: target.targetType,
+      referenceType: target.referenceType,
       path: target.path,
       userId: target.userId,
       filters: target.filters,
       orderBy: target.orderBy,
       limit: target.limit,
+      column: target.column,
       snapshotVersion: target.snapshotVersion?.value,
       isActive: target.isActive,
     };
@@ -978,11 +1016,13 @@ export class OfflineIndexedDbPersistence implements OfflinePersistence {
       canonicalQuery: record.canonicalQuery ?? record.canonicalId,
       canonicalId: record.canonicalId ?? record.canonicalQuery,
       targetType: record.targetType,
+      referenceType: record.referenceType,
       path: record.path,
       userId: record.userId,
       filters: record.filters,
       orderBy: record.orderBy,
       limit: record.limit,
+      column: record.column,
       snapshotVersion: record.snapshotVersion ? new OracledbSnapshotVersion(record.snapshotVersion) : undefined,
       isActive: record.isActive,
     };

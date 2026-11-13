@@ -36,6 +36,10 @@ import { AuthError, authErrorHandler, ErrorCodeMessage } from '../errors.js';
  * @param auth - The Auth instance.
  * @param resolver - Optional popup/redirect resolver.
  * @returns A promise resolving with the UserCredential if available, or null.
+ * @example
+ * ```ts
+ * const result = await getRedirectResult(auth);
+ * ```
  */
 export function getRedirectResult(
   auth: Auth,
@@ -48,7 +52,6 @@ export function getRedirectResult(
     }
   return auth.getRedirectResult();
 }
-
 
 
 

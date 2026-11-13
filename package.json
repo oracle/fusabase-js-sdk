@@ -1,9 +1,37 @@
 {
   "name": "fusabase",
-  "version": "26.3.0",
+  "version": "26.3.1",
   "type": "module",
-  "description": "Oracle® Backend with Firebase APIs JavaScript Modular SDK Reference",
+  "description": "FUSABASE Reference JS SDK",
   "exports": {
+    "./fusabase-collections": {
+      "types": "./dist/fusabase-collections/src/index.d.ts",
+      "import": "./dist/fusabase-collections/src/index.js"
+    },
+    "./fusabase-collections/app": {
+      "types": "./dist/fusabase-collections/src/app.d.ts",
+      "import": "./dist/fusabase-collections/src/app.js"
+    },
+    "./fusabase-collections/auth": {
+      "types": "./dist/fusabase-collections/src/auth.d.ts",
+      "import": "./dist/fusabase-collections/src/auth.js"
+    },
+    "./fusabase-collections/db": {
+      "types": "./dist/fusabase-collections/src/db.d.ts",
+      "import": "./dist/fusabase-collections/src/db.js"
+    },
+    "./fusabase-collections/storage": {
+      "types": "./dist/fusabase-collections/src/storage.d.ts",
+      "import": "./dist/fusabase-collections/src/storage.js"
+    },
+    "./fusabase-collections/ui": {
+      "types": "./dist/fusabase-collections/src/ui.d.ts",
+      "import": "./dist/fusabase-collections/src/ui.js"
+    },
+    "./fusabase-relational": {
+      "types": "./dist/fusabase-relational/src/index.d.ts",
+      "import": "./dist/fusabase-relational/src/index.js"
+    },
     "./auth": {
       "types": "./dist/auth/src/index.d.ts",
       "import": "./dist/auth/src/index.js"
@@ -11,6 +39,10 @@
     "./oracledb": {
       "types": "./dist/oracledb/src/index.d.ts",
       "import": "./dist/oracledb/src/index.js"
+    },
+    "./relational": {
+      "types": "./dist/relational/src/index.d.ts",
+      "import": "./dist/relational/src/index.js"
     },
     "./storage": {
       "types": "./dist/storage/src/index.d.ts",
@@ -30,8 +62,16 @@
     }
   },
   "browser": {
+    "./fusabase-collections": "./dist/fusabase-collections/src/index.js",
+    "./fusabase-collections/app": "./dist/fusabase-collections/src/app.js",
+    "./fusabase-collections/auth": "./dist/fusabase-collections/src/auth.js",
+    "./fusabase-collections/db": "./dist/fusabase-collections/src/db.js",
+    "./fusabase-collections/storage": "./dist/fusabase-collections/src/storage.js",
+    "./fusabase-collections/ui": "./dist/fusabase-collections/src/ui.js",
+    "./fusabase-relational": "./dist/fusabase-relational/src/index.js",
     "./auth": "./dist/auth/src/index.js",
     "./oracledb": "./dist/oracledb/src/index.js",
+    "./relational": "./dist/relational/src/index.js",
     "./storage": "./dist/storage/src/index.js",
     "./app": "./dist/app/src/index.js",
     "./app-trust": "./dist/app-trust/src/index.js",
@@ -39,11 +79,35 @@
   },
   "typesVersions": {
     "*": {
+      "fusabase-collections": [
+        "./dist/fusabase-collections/src/index.d.ts"
+      ],
+      "fusabase-collections/app": [
+        "./dist/fusabase-collections/src/app.d.ts"
+      ],
+      "fusabase-collections/auth": [
+        "./dist/fusabase-collections/src/auth.d.ts"
+      ],
+      "fusabase-collections/db": [
+        "./dist/fusabase-collections/src/db.d.ts"
+      ],
+      "fusabase-collections/storage": [
+        "./dist/fusabase-collections/src/storage.d.ts"
+      ],
+      "fusabase-collections/ui": [
+        "./dist/fusabase-collections/src/ui.d.ts"
+      ],
+      "fusabase-relational": [
+        "./dist/fusabase-relational/src/index.d.ts"
+      ],
       "auth": [
         "./dist/auth/src/index.d.ts"
       ],
       "oracledb": [
         "./dist/oracledb/src/index.d.ts"
+      ],
+      "relational": [
+        "./dist/relational/src/index.d.ts"
       ],
       "storage": [
         "./dist/storage/src/index.d.ts"
@@ -61,7 +125,14 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copyfiles.js",
-    "test": "mocha test/**/*.test.js",
+    "stage:packages": "npm run build && node scripts/stage-packages.js",
+    "pack:packages": "npm run stage:packages && node scripts/pack-packages.js",
+    "verify:packages": "npm run pack:packages && node scripts/verify-packages.js",
+    "test": "node --env-file=.env ./node_modules/mocha/bin/mocha.js test/**/*.test.js",
+    "test:collection-level": "node scripts/run-test-suite.js collection-level",
+    "test:relational": "node scripts/run-test-suite.js relational",
+    "test:relational:behavior-integration": "node scripts/run-test-suite.js relational-behavior",
+    "test:relational:projection-integration": "npm run test:relational",
     "docs": "typedoc",
     "postdocs": "node scripts/docs.js",
     "prepublishOnly": "npm run build"

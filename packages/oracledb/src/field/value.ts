@@ -30,6 +30,7 @@ import { getErrorMessage } from "../errors.js";
 /**
  * Represents an operation for a field value to be applied to the server.
  */
+/** Represents a value sentinel used in a write operation. @example `const value = FieldValue.serverTimestamp();` */
 export class FieldValue {
   /**
    * @internal
@@ -40,23 +41,36 @@ export class FieldValue {
    */
   #operation: string;
 
-  /**
-   * Private constructor.
-   * Use one of the static factory methods instead.
-   * @param op - The operation type.
-   * @param value - The value to apply.
-   */
+/**
+ * Constructs a FieldValue instance with the supplied configuration.
+ *
+ * @param op - The op accepted by this operation.
+ * @param value - The value to store or transform.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { FieldValue } from "fusabase/oracledb";
+ * const result = new FieldValue("custom", { title: "Example" });
+ * void result;
+ * ```
+ */
   constructor(op: string, value: any) {
     this.#value = value;
     this.#operation = op;
   }
 
-  /**
-   * Compares this `FieldValue` with another.
-   * @param other Another `FieldValue` instance.
-   * @returns `true` if both are equal (type and value), else `false`.
-   * @throws {Error} if `other` is not a `FieldValue`.
-   */
+/**
+ * Executes the isEqual operation for this public SDK type.
+ *
+ * @param other - The value to compare with this value.
+ * @returns The result produced by `isEqual`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { FieldValue } from "fusabase/oracledb";
+ * const result = new FieldValue("custom", ["a"]).isEqual(new FieldValue("custom", ["a"]));
+ * void result;
+ * ```
+ */
   isEqual(other: FieldValue): boolean {
     if (!(other instanceof FieldValue)) {
       const error: any = new Error("The provided object must be an instance of FieldValue.");
@@ -87,43 +101,83 @@ export class FieldValue {
     return this.#operation;
   }
 
-  /**
-   * Creates a `FieldValue` for removing elements from an array.
-   * @param elements Elements to be removed.
-   */
+/**
+ * Executes the arrayRemove operation for this public SDK type.
+ *
+ * @param elements - One or more array elements to transform.
+ * @returns The result produced by `arrayRemove`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { FieldValue } from "fusabase/oracledb";
+ * const result = FieldValue.arrayRemove("example");
+ * void result;
+ * ```
+ */
   static arrayRemove(...elements: any[]): FieldValue {
     nullCheck(elements, "Invalid arguments passed");
     return new FieldValue("FieldValue:arrayRemove", elements);
   }
 
-  /**
-   * Creates a `FieldValue` for adding elements to an array (union).
-   * @param elements Elements to be added (union).
-   */
+/**
+ * Executes the arrayUnion operation for this public SDK type.
+ *
+ * @param elements - One or more array elements to transform.
+ * @returns The result produced by `arrayUnion`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { FieldValue } from "fusabase/oracledb";
+ * const result = FieldValue.arrayUnion("example");
+ * void result;
+ * ```
+ */
   static arrayUnion(...elements: any[]): FieldValue {
     nullCheck(elements, "Invalid arguments passed");
     return new FieldValue("FieldValue:arrayUnion", elements);
   }
 
-  /**
-   * Creates a `FieldValue` for deleting a field.
-   */
+/**
+ * Executes the delete operation for this public SDK type.
+ *
+ * @returns The result produced by `delete`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { FieldValue } from "fusabase/oracledb";
+ * const result = FieldValue.delete();
+ * void result;
+ * ```
+ */
   static delete(): FieldValue {
     return new FieldValue("FieldValue:delete", null);
   }
 
-  /**
-   * Creates a `FieldValue` for incrementing a numeric field.
-   * @param value Amount to increment by.
-   */
+/**
+ * Executes the increment operation for this public SDK type.
+ *
+ * @param value - The value to store or transform.
+ * @returns The result produced by `increment`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { FieldValue } from "fusabase/oracledb";
+ * const result = FieldValue.increment({ title: "Example" });
+ * void result;
+ * ```
+ */
   static increment(value: number): FieldValue {
     nullCheck(value, "Invalid argument passed");
     return new FieldValue("FieldValue:increment", value);
   }
 
-  /**
-   * Creates a `FieldValue` for setting a server timestamp.
-   */
+/**
+ * Executes the serverTimestamp operation for this public SDK type.
+ *
+ * @returns The result produced by `serverTimestamp`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { FieldValue } from "fusabase/oracledb";
+ * const result = FieldValue.serverTimestamp();
+ * void result;
+ * ```
+ */
   static serverTimestamp(): FieldValue {
     return new FieldValue("FieldValue:serverTimestamp", "servertimestamp");
   }
@@ -135,16 +189,24 @@ export class FieldValue {
    */
 declare function oracledbErrorHandler(err: Error): Error;
 
+/** Represents an instant with seconds and nanoseconds. @example `const timestamp = Timestamp.now();` */
 export class Timestamp {
   #seconds: number;
   #nanoseconds: number;
 
-  /**
-   * Creates a new `Timestamp` instance.
-   * @param seconds - The number of seconds since the Unix epoch.
-   * @param nanoseconds - Nanoseconds (0-999,999,999).
-   * @throws {Error} If the provided values are out of range.
-   */
+/**
+ * Constructs a Timestamp instance with the supplied configuration.
+ *
+ * @param seconds - Whole seconds since the Unix epoch.
+ * @param nanoseconds - Nanoseconds within the current second.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Timestamp } from "fusabase/oracledb";
+ * const result = new Timestamp(0, 0);
+ * void result;
+ * ```
+ */
   constructor(seconds: number, nanoseconds: number) {
     argCheck(seconds, "Invalid seconds passed", true, [typeStrings.INT]);
     argCheck(nanoseconds, "Invalid nanoseconds passed", true, [typeStrings.INT]);
@@ -172,16 +234,33 @@ export class Timestamp {
     return this.#nanoseconds;
   }
 
-  /** Converts the timestamp to a JavaScript `Date` object. */
+/**
+ * Executes the toDate operation for this public SDK type.
+ *
+ * @returns The result produced by `toDate`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Timestamp } from "fusabase/oracledb";
+ * const result = new Timestamp(1_700_000_000, 0).toDate();
+ * void result;
+ * ```
+ */
   toDate(): Date {
     return new Date(this.seconds * 1000 + Math.floor(this.nanoseconds / 1e6));
   }
 
-  /**
-   * Compares this Timestamp with another.
-   * @param other - Another Timestamp.
-   * @throws {Error} if the provided object is not a Timestamp instance.
-   */
+/**
+ * Executes the isEqual operation for this public SDK type.
+ *
+ * @param other - The value to compare with this value.
+ * @returns The result produced by `isEqual`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Timestamp } from "fusabase/oracledb";
+ * const result = new Timestamp(1_700_000_000, 0).isEqual(new Timestamp(1_700_000_000, 0));
+ * void result;
+ * ```
+ */
   isEqual(other: Timestamp): boolean {
     if (!(other instanceof Timestamp)) {
       const error: any = new Error(getErrorMessage('notTimestampInstance'));
@@ -192,22 +271,50 @@ export class Timestamp {
       this.nanoseconds === other.nanoseconds;
   }
 
-  /** Converts the Timestamp to milliseconds since epoch. */
+/**
+ * Executes the toMillis operation for this public SDK type.
+ *
+ * @returns The result produced by `toMillis`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Timestamp } from "fusabase/oracledb";
+ * const result = new Timestamp(1_700_000_000, 0).toMillis();
+ * void result;
+ * ```
+ */
   toMillis(): number {
     return this.seconds * 1000 + Math.floor(this.nanoseconds / 1e6);
   }
 
-  /** Returns a string representation: seconds.nanoseconds */
+/**
+ * Executes the valueOf operation for this public SDK type.
+ *
+ * @returns The result produced by `valueOf`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Timestamp } from "fusabase/oracledb";
+ * const result = new Timestamp(1_700_000_000, 0).valueOf();
+ * void result;
+ * ```
+ */
   valueOf(): string {
     const secondsString = this.seconds.toString().padStart(11, '0');
     const nanosecondsString = this.nanoseconds.toString().padStart(9, '0');
     return `${secondsString}.${nanosecondsString}`;
   }
 
-  /**
-   * Creates a Timestamp from a JavaScript Date object.
-   * @throws {Error} If an invalid date is provided.
-   */
+/**
+ * Executes the fromDate operation for this public SDK type.
+ *
+ * @param date - The date accepted by this operation.
+ * @returns The result produced by `fromDate`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Timestamp } from "fusabase/oracledb";
+ * const result = Timestamp.fromDate(value);
+ * void result;
+ * ```
+ */
   static fromDate(date: Date): Timestamp {
     argCheck(date, "Invalid date passed", true, [typeStrings.DATE]);
     const milliseconds = date.getTime();
@@ -216,10 +323,18 @@ export class Timestamp {
     return new Timestamp(seconds, nanoseconds);
   }
 
-  /**
-   * Creates a Timestamp from milliseconds since the Unix epoch.
-   * @throws {Error} If an invalid value is provided.
-   */
+/**
+ * Executes the fromMillis operation for this public SDK type.
+ *
+ * @param milliseconds - Milliseconds since the Unix epoch.
+ * @returns The result produced by `fromMillis`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Timestamp } from "fusabase/oracledb";
+ * const result = Timestamp.fromMillis(0);
+ * void result;
+ * ```
+ */
   static fromMillis(milliseconds: number): Timestamp {
     argCheck(milliseconds, "Invalid milliseconds passed", true, [typeStrings.INT]);
     const seconds = Math.floor(milliseconds / 1000);
@@ -227,7 +342,17 @@ export class Timestamp {
     return new Timestamp(seconds, nanoseconds);
   }
 
-  /** Returns the current time as a Timestamp. */
+/**
+ * Executes the now operation for this public SDK type.
+ *
+ * @returns The result produced by `now`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Timestamp } from "fusabase/oracledb";
+ * const result = Timestamp.now();
+ * void result;
+ * ```
+ */
   static now(): Timestamp {
     const milliseconds = Date.now();
     const seconds = Math.floor(milliseconds / 1000);
@@ -235,9 +360,17 @@ export class Timestamp {
     return new Timestamp(seconds, nanoseconds);
   }
 
-  /**
-   * Converts the Timestamp to an ISO 8601 string with microseconds precision.
-   */
+/**
+ * Executes the toTimestampString operation for this public SDK type.
+ *
+ * @returns The result produced by `toTimestampString`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Timestamp } from "fusabase/oracledb";
+ * const result = new Timestamp(1_700_000_000, 0).toTimestampString();
+ * void result;
+ * ```
+ */
   toTimestampString(): string {
     const date = new Date(this.#seconds * 1000);
     const milliseconds = Math.floor(this.#nanoseconds / 1e6);
@@ -246,10 +379,18 @@ export class Timestamp {
     return `${dateString}${microseconds.toString().padStart(3, '0')}`;
   }
 
-  /**
-   * Parses an ISO 8601 string and converts it to a Timestamp instance.
-   * @throws {Error} If an invalid timestamp string is provided.
-   */
+/**
+ * Executes the fromTimestampString operation for this public SDK type.
+ *
+ * @param str - The str accepted by this operation.
+ * @returns The result produced by `fromTimestampString`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Timestamp } from "fusabase/oracledb";
+ * const result = Timestamp.fromTimestampString(value);
+ * void result;
+ * ```
+ */
   static fromTimestampString(str: string): Timestamp {
     argCheck(str, "Invalid timestamp string passed", true, [typeStrings.STRING]);
     const regex = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?$/;
@@ -266,16 +407,32 @@ export class Timestamp {
     return new Timestamp(seconds, nanoseconds);
   }
 
-  /**
-   * Returns this Timestamp as an ISO8601 string with microseconds.
-   */
+/**
+ * Executes the toString operation for this public SDK type.
+ *
+ * @returns The result produced by `toString`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Timestamp } from "fusabase/oracledb";
+ * const result = new Timestamp(1_700_000_000, 0).toString();
+ * void result;
+ * ```
+ */
   toString(): string {
     return this.toTimestampString();
   }
 
-  /**
-   * Returns JSON representation (ISO8601 with microseconds).
-   */
+/**
+ * Executes the toJSON operation for this public SDK type.
+ *
+ * @returns The result produced by `toJSON`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Timestamp } from "fusabase/oracledb";
+ * const result = new Timestamp(1_700_000_000, 0).toJSON();
+ * void result;
+ * ```
+ */
   toJSON(): string {
     return this.toString();
   }

@@ -25,7 +25,7 @@
 //-----------------------------------------------------------------------------
 // 
 
-import { App } from "./public-types.js";
+import { App, type BackendType, type ConfigBackendType, type FusabaseConfig, type FusabaseOptions } from "./public-types.js";
 import { FusabaseError } from "./errors.js";
 import { LogLevel } from "../../logger/LogLevel.js";
 import {initializeApp, getApp, getApps, deleteApp, setLogLevel} from './app.js';
@@ -38,6 +38,10 @@ import { _getProvider, _registerComponent, _removeServiceInstance } from './fusa
  * @param options - The configuration options for the app, or null.
  * @param name - Optional name for the app. Defaults to "[DEFAULT]" if not provided.
  * @returns The initialized App instance.
+ * @example
+ * ```ts
+ * const app = initializeApp(config);
+ * ```
  */
 export {initializeApp};
 
@@ -45,12 +49,20 @@ export {initializeApp};
  * Retrieves an existing App instance by its name.
  * @param name - The name of the app to retrieve. Defaults to "[DEFAULT]" if not provided.
  * @returns The App instance with the specified name.
+ * @example
+ * ```ts
+ * const app = getApp();
+ * ```
  */
 export {getApp};
 
 /**
  * Retrieves all initialized App instances.
  * @returns An array of all App instances.
+ * @example
+ * ```ts
+ * const apps = getApps();
+ * ```
  */
 export {getApps};
 
@@ -58,12 +70,21 @@ export {getApps};
  * Deletes the specified App instance and cleans up its resources.
  * @param app - The App instance to delete.
  * @returns A promise that resolves to null when deletion is complete.
+ * @example
+ * ```ts
+ * await deleteApp(app);
+ * ```
  */
 export {deleteApp};
 
 /**
  * Sets the log level for all initialized apps.
  * @param logLevel - The LogLevel to apply to all apps.
+ * @returns Nothing.
+ * @example
+ * ```ts
+ * setLogLevel(LogLevel.DEBUG);
+ * ```
  */
 export {setLogLevel};
 
@@ -71,6 +92,7 @@ export {setLogLevel};
  * The main App class that holds initialization information for a collection of FUSABASE services.
  */
 export { App };
+export type { BackendType, ConfigBackendType, FusabaseConfig, FusabaseOptions };
 
 /**
  * Custom error class for FUSABASE operations, extending the standard Error class.

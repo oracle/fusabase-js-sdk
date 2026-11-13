@@ -23,12 +23,20 @@
 // limitations under the License.
 //
 //-----------------------------------------------------------------------------
-// 
+//
 
 import {LogLevel} from "../../logger/LogLevel.js";
 import { Component, ComponentContainer } from "./component.js";
 
+/** Backend families accepted by public initialization APIs. */
+export type BackendType = 'COLLECTION' | 'RELATIONAL';
+type ResolvedBackendType = 'collection' | 'relational';
+
+/** Backend family declared by console-generated initialization configuration. */
+export type ConfigBackendType = 'COLLECTION' | 'RELATIONAL';
+
 interface AppConfig {
+  backendType?: ResolvedBackendType;
   objsType?: string;
   storageBucket?: string;
   authType?: string;
@@ -38,13 +46,17 @@ interface AppConfig {
 
 
 /**
- * A {@link @fusabase/app#App} holds the initialization information for a collection of
+ * An {@link App} holds the initialization information for a collection of
  * services.
  *
  * Do not call this constructor directly. Instead, use
  * {@link initializeApp} to create an app.
  *
  * @public
+ * @example
+ * ```ts
+ * const app = initializeApp({ project_id: "project-id" });
+ * ```
  */
 export class App {
 
@@ -55,7 +67,8 @@ export class App {
    * @example
    * ```javascript
    * const app = initializeApp(config);
-   * console.log(app.options.databaseURL === config.databaseURL);  // true
+   * // Input config uses snake_case; the exposed options use camelCase.
+   * console.log(app.options.ordsHost === config.ords_host); // true
    * ```
    */
   readonly options: FusabaseOptions;
@@ -83,11 +96,6 @@ export class App {
 
   /**
    * The settable config flag for GDPR opt-in/opt-out
-   *
-   * @example
-   * ```ts
-   * app.automaticDataCollectionEnabled = true;
-   * ```
    */
   automaticDataCollectionEnabled: boolean;
 
@@ -95,27 +103,19 @@ export class App {
   private configValue: AppConfig | null = null;
   private readonly componentContainer: ComponentContainer;
 
-  /**
-   * Gets service configuration derived from the application options.
-   *
-   * @returns The service configuration, or `null` before configuration is applied.
-   * @example
-   * ```ts
-   * console.log(app.config?.storageBucket);
-   * ```
-   */
   get config(): AppConfig | null {
     return this.configValue;
   }
 
   /**
-   * Creates an application instance. Prefer {@link initializeApp} for public use.
+   * Creates an application instance.
    *
-   * @param options - The application configuration.
-   * @param name - The instance name.
+   * @param options - Immutable application configuration.
+   * @param name - Unique application name.
+   * @returns The application instance.
    * @example
    * ```ts
-   * const app = initializeApp(options);
+   * const app = initializeApp({ project_id: "project-id" }, "secondary");
    * ```
    */
   constructor(options: FusabaseOptions, name: string) {
@@ -128,17 +128,16 @@ export class App {
     );
   }
 
-  /**
-   * Gets the component container associated with this application.
-   *
-   * @returns The component container.
-   */
   get container(): ComponentContainer {
     return this.componentContainer;
   }
 
+  get isDeleted(): boolean {
+    return this.componentContainer.isDeleted;
+  }
+
   /**
-   * Gets the authentication service associated with this application.
+   * Gets the authentication service for this application.
    *
    * @returns The authentication service instance.
    * @example
@@ -151,26 +150,39 @@ export class App {
   }
 
   /**
-   * Gets a database service associated with this application.
+   * Gets the document-data service for this application.
    *
-   * @param databaseId - Optional identifier for a named database.
-   * @returns The database service instance.
+   * @returns The document-data service instance.
    * @example
    * ```ts
-   * const db = app.oracledb();
+   * const database = app.oracledb();
    * ```
    */
-  oracledb(databaseId?: string): any {
-    return this.componentContainer.getProvider('oracledb').getImmediate({
+  oracledb(): any {
+    return this.componentContainer.getProvider('oracledb').getImmediate();
+  }
+
+  /**
+   * Gets a relational-data service instance.
+   *
+   * @param databaseId - Optional service-instance identifier.
+   * @returns The relational-data service instance.
+   * @example
+   * ```ts
+   * const database = app.relational();
+   * ```
+   */
+  relational(databaseId?: string): any {
+    return this.componentContainer.getProvider('relational').getImmediate({
       identifier: databaseId
     });
   }
 
   /**
-   * Gets a storage service associated with this application.
+   * Gets a file-storage service instance.
    *
    * @param url - Optional storage endpoint identifier.
-   * @returns The storage service instance.
+   * @returns The file-storage service instance.
    * @example
    * ```ts
    * const storage = app.storage();
@@ -183,24 +195,18 @@ export class App {
   }
 
   /**
-   * Clears service instances registered with this application.
+   * Deletes this application and its registered services.
    *
-   * @returns A promise that resolves once registered instances are cleared.
+   * @returns A promise that resolves when deletion completes.
    * @example
    * ```ts
    * await app.delete();
    * ```
    */
   async delete(): Promise<void> {
-    this.componentContainer.clearInstances();
-    // fusabase._apps[this.name] = null;
+    await this.componentContainer.delete();
   }
 
-  /**
-   * Gets the application's diagnostic log level.
-   *
-   * @returns The current log level.
-   */
   get logLevel(): LogLevel {
     return this.logLevelValue;
   }
@@ -213,6 +219,7 @@ export class App {
     if (!this.options) return;
 
     const config: AppConfig = {
+      backendType: this.options.backendType,
       objsType: this.options.objsType,
       storageBucket: this.options.storageBucket,
       authType: this.options.authType,
@@ -262,7 +269,7 @@ export class App {
 //    * @example
 //    * ```javascript
 //    * const app = initializeApp(config);
-//    * console.log(app.options.databaseURL === config.databaseURL);  // true
+//    * console.log(app.options.ordsHost === config.ords_host);  // true
 //    * ```
 //    */
 //   readonly options: FusabaseOptions;
@@ -307,89 +314,119 @@ export class App {
 /**
  * @public
  *
- * Fusabase configuration object. Contains a set of parameters required by
- * services in order to successfully communicate with Fusabase server APIs
- * and to associate client data with your Fusabase project and
- * Fusabase application. Typically this object is populated by the Fusabase
- * console at project setup.
+ * Normalized options retained by an initialized app. All property names use
+ * camelCase after the console's snake_case configuration is normalized.
  */
 export interface FusabaseOptions {
+  /** Normalized backend selected by `initializeApp()`. */
+  backendType: ResolvedBackendType;
+
   /**
    * An encrypted string used when calling certain APIs that don't need to
    * access private user data
    * (example value: `AIzaSyDOCAbC123dEf456GhI789jKl012-MnO`).
    */
   ordsHost?: string;
-  ords_host?: string;
   /**
    * Auth domain for the project ID.
    */
   schema?: string;
 
+/** Describes the public `appName` value. */
+  appName?: string;
+
   /**
    * Platform / app type identifier from config (e.g. config `app_type`).
    */
   appType?: string;
-  app_type?: string;
   /**
    * Application id.
    */
   appID?: string;
-  app_id?: string;
   /**
    * The unique identifier for the project across all of Fusabase.
    */
   projectID?: string;
-  project_id?: string;
   /**
    * The default Cloud Storage bucket name.
    */
   objsType?: string;
-  objs_type?: string;
   /**
    * Unique numerical value used to identify each sender that can send
    * Fusabase Cloud Messaging messages to client apps.
    */
   storageBucket?: string;
-  storage_bucket?: string;
   /**
    * Unique identifier for the app.
    */
   authType?: string;
-  auth_type?: string;
   /**
    * An ID automatically created when you enable Analytics in your
    * Fusabase project and register a web app. In versions 7.20.0
    * and higher, this parameter is optional.
    */
   authID?: string;
-  auth_id?: string;
 
-  /**
-   * IDCS identity domain URL used for IDCS session logout.
-   */
+  /** Optional IDCS identity domain URL. */
   idcsDomainURL?: string;
-  idcs_domain_url?: string;
 
+  /** Whether realtime listeners use sockets. Defaults to `true`. */
   useSocket?: boolean;
-  use_socket?: boolean;
 
+/** Describes the public `longPollingInterval` value. */
   longPollingInterval?: number;
-  long_polling_interval?: number;
 
+/** Describes the public `version` value. */
   version?: number;
 
+/** Describes the public `chunkSize` value. */
   chunkSize?: number;
-  upload_chunk_size?: number;
 
   /**
    * Maximum number of bytes accepted by Storage upload helpers.
    */
   maxUploadBytes?: number;
-  max_upload_bytes?: number;
 
   /** @internal */
   appTrustToken?: string;
+}
+
+/**
+ * Input accepted by {@link initializeApp}. This is the console configuration
+ * shape, so fields use snake_case. Initialized `app.options` is represented by
+ * {@link FusabaseOptions} and always uses camelCase.
+ */
+export interface FusabaseConfig {
+/** Database schema used by database requests. Required. */
+  schema?: string;
+/** Base service URL, including the ORDS path and trailing slash. Required. */
+  ords_host?: string;
+/** Application display/name value registered with the service. Optional. */
+  app_name?: string;
+/** Application platform/type identifier, for example `WEB`. Required. */
+  app_type?: string;
+/** Application identifier issued during registration. Required. */
+  app_id?: string;
+/** Project identifier that scopes service requests. Required. */
+  project_id?: string;
+/** Object/file storage implementation identifier. Required. */
+  objs_type?: string;
+/** Default file-storage bucket name. Required. */
+  storage_bucket?: string;
+/** Authentication provider/type identifier. Required. */
+  auth_type?: string;
+/** Authentication application or tenant identifier. Required. */
+  auth_id?: string;
+  /** Backend family for this configuration. `COLLECTION` and `RELATIONAL` are supported. */
+  backend_type?: ConfigBackendType;
+  /** Whether realtime listeners use sockets. Defaults to `true`. */
+  use_socket?: boolean;
+/** Long-poll interval in seconds when sockets are disabled. Defaults to `29`. */
+  long_polling_interval?: number;
+/** Resumable-upload chunk size in bytes. Defaults to `16 MiB`. */
+  upload_chunk_size?: number;
+/** Maximum allowed upload size in bytes. Optional. */
+  max_upload_bytes?: number;
 }
 
 /**

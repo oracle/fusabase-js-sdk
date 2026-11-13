@@ -30,8 +30,7 @@
  *
  * @example
  * ```ts
- * import { ActionCodeInfo } from './type/action-code.js';
- * const info: ActionCodeInfo = { operation: 'PASSWORD_RESET', email: 'user@example.com' };
+ * const info = { operation: 'PASSWORD_RESET', email: 'user@example.com' };
  * console.log(info.operation); // PASSWORD_RESET
  * ```
  */
@@ -49,8 +48,7 @@ export interface ActionCodeInfo {
  *
  * @example
  * ```ts
- * import { ActionCodeSettings } from './type/action-code.js';
- * const settings: ActionCodeSettings = {
+ * const settings = {
  *   url: 'https://example.com/finishSignUp',
  *   handleCodeInApp: true,
  *   iOS: { bundleId: 'com.example.ios' },

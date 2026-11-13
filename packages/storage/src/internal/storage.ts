@@ -23,7 +23,7 @@
 // limitations under the License.
 //
 //-----------------------------------------------------------------------------
-// 
+//
 
 import { App } from "../../../app/src/public-types.js";
 import { LogLevel } from "../../../logger/LogLevel.js";
@@ -35,6 +35,11 @@ import { StorageReference } from "./reference.js";
 
 /**
  * Class representing the Storage service.
+ *
+ * @example
+ * ```ts
+ * const storage = getStorage(app);
+ * ```
  */
 export class Storage {
   private _app: App;
@@ -49,10 +54,18 @@ export class Storage {
   static TaskEvent = TaskEvent;
 
   /** @internal */
-  /**
-   * Constructs the storage instance.
-   * @param {App} app fusabase App
-   */
+/**
+ * Constructs a Storage instance with the supplied configuration.
+ *
+ * @param app - The app instance that owns this service.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Storage } from "fusabase/storage";
+ * const result = new Storage(value);
+ * void result;
+ * ```
+ */
   constructor(app: App) {
     argCheck(app, 'Invalid app object', true, [typeStrings.OBJECT]);
 
@@ -86,7 +99,7 @@ export class Storage {
   }
 
   /**
-   * @property 
+   * @property
    * @returns {App} fusabase App
    */
   get app(): App {
@@ -94,7 +107,7 @@ export class Storage {
   }
 
   /**
-   * @property 
+   * @property
    */
   /**
    * @internal
@@ -125,20 +138,36 @@ export class Storage {
     return this.storageHelper.config;
   }
 
-  /**
-   * Sets the maximum retry time for operations.
-   * @param t - The retry time in milliseconds.
-   */
+/**
+ * Executes the setMaxOperationRetryTime operation for this public SDK type.
+ *
+ * @param t - Maximum retry time in milliseconds.
+ * @returns The result produced by `setMaxOperationRetryTime`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Storage } from "fusabase/storage";
+ * const result = client.setMaxOperationRetryTime(value);
+ * void result;
+ * ```
+ */
   setMaxOperationRetryTime(t: number): void {
     argCheck(t, "Time should be a valid number", true, [typeStrings.INT]);
     this.maxOperationRetryTime = t;
     this.storageHelper.maxOperationRetryTime = t;
   }
 
-  /**
-   * Sets the maximum retry time for uploads.
-   * @param t - The retry time in milliseconds.
-   */
+/**
+ * Executes the setMaxUploadRetryTime operation for this public SDK type.
+ *
+ * @param t - Maximum retry time in milliseconds.
+ * @returns The result produced by `setMaxUploadRetryTime`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Storage } from "fusabase/storage";
+ * const result = client.setMaxUploadRetryTime(value);
+ * void result;
+ * ```
+ */
   setMaxUploadRetryTime(t: number): void {
     argCheck(t, "Time should be a valid number", true, [typeStrings.INT]);
     this.maxUploadRetryTime = t;
@@ -171,8 +200,8 @@ export class Storage {
   /**
    * @internal
    */
-  __fetchDownloadUrl(path: string, access_token: string | null): any {
-    return this.storageHelper.fetchDownloadUrl(path, access_token);
+  __fetchDownloadUrl(path: string, access_token: string | null, timeExpires?: Date | string): any {
+    return this.storageHelper.fetchDownloadUrl(path, access_token, timeExpires);
   }
 
   /**

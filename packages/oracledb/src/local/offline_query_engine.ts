@@ -25,28 +25,29 @@
 //-----------------------------------------------------------------------------
 // 
 
-import { Query } from '../collection/reference.js';
-import { CollectionReference } from '../collection/reference.js';
+import { Query, CollectionReference, DualityViewColReference } from '../collection/reference.js';
 import { QuerySnapshot } from '../collection/snapshot.js';
-import { DocumentReference } from '../document/reference.js';
+import { DocumentReference, DualityViewDocReference } from '../document/reference.js';
 import { DocumentSnapshot, QueryDocumentSnapshot } from '../document/snapshot.js';
 import { SnapshotMetadata } from '../listener/snapshot.js';
 import { OracledbDocumentKey } from '../model/index.js';
+import { DocumentData } from '../types/common.js';
 import { OfflineLocalStore } from './offline_local_store.js';
 import { getFieldValue, matchesQueryFilters } from './offline_query_matcher.js';
 import { OfflineCachedDocument, OfflineQueryTarget } from './types.js';
 
 export function canonicalIdForTarget(target: any): string {
-  if (target instanceof DocumentReference) {
-    return `doc:${target.path}`;
+  if (target instanceof DocumentReference || target instanceof DualityViewDocReference) {
+    return `${target instanceof DualityViewDocReference ? 'duality-doc' : 'doc'}:${target.path}`;
   }
   const queryLike = target as any;
   return JSON.stringify({
-    type: 'query',
+    type: queryLike.type === 'dualityviewcollection' ? 'duality-query' : 'query',
     path: Array.isArray(queryLike._path) ? queryLike._path.join('/') : '',
     conditions: queryLike._conditions ?? [],
     explicitOrder: queryLike._explicitOrder ?? [],
     limit: queryLike._limit ?? 0,
+    column: queryLike._column ?? [],
     joins: queryLike._joins ?? [],
     aggregate: queryLike._aggregate ?? [],
     vectorSearch: queryLike._vectorSearch ?? null,
@@ -57,7 +58,7 @@ export class OfflineQueryEngine {
   constructor(private readonly localStore: OfflineLocalStore) {}
 
   async getDocumentFromCache<AppModelType>(
-    ref: DocumentReference<AppModelType>,
+    ref: DocumentReference<AppModelType> | DualityViewDocReference<AppModelType>,
     forceFromCache?: boolean
   ): Promise<DocumentSnapshot<AppModelType>> {
     const key = OracledbDocumentKey.fromPath(ref.path);
@@ -106,18 +107,22 @@ export class OfflineQueryEngine {
     if (queryLike._limit > 0) {
       cachedDocs = cachedDocs.slice(0, queryLike._limit);
     }
-    const collectionRef = new CollectionReference(queryLike.oracledb, collectionPath);
+    const collectionRef = queryLike.type === 'dualityviewcollection'
+      ? new DualityViewColReference(queryLike.oracledb, collectionPath)
+      : new CollectionReference(queryLike.oracledb, collectionPath);
     collectionRef.converter = queryLike.converter;
     const docSnaps = cachedDocs.map(cached => {
-      const ref = new DocumentReference(
-        queryLike.oracledb,
-        cached.key.segments[cached.key.segments.length - 1],
-        collectionRef
-      );
+      const ref = collectionRef instanceof DualityViewColReference
+        ? new DualityViewDocReference(queryLike.oracledb, cached.key.path, collectionRef)
+        : new DocumentReference(
+          queryLike.oracledb,
+          cached.key.segments[cached.key.segments.length - 1],
+          collectionRef
+        );
       ref.converter = queryLike.converter;
       return new QueryDocumentSnapshot(
         {
-          DOCUMENT: cached.data,
+          DOCUMENT: this.applyColumnSelection(cached.data, queryLike._column ?? []),
           VERSION: cached.version.value,
           LAST_MODIFIED: cached.updateTime,
           updateTime: cached.updateTime,
@@ -154,6 +159,31 @@ export class OfflineQueryEngine {
 
   private hasPendingWrites(document: OfflineCachedDocument | null | undefined): boolean {
     return Boolean(document?.hasLocalMutations);
+  }
+
+  private applyColumnSelection(data: DocumentData | null, columns: string[]): DocumentData | null {
+    if (data == null || columns.length === 0) {
+      return data;
+    }
+
+    const selected: DocumentData = {};
+    for (const column of columns) {
+      const value = getFieldValue(data, column);
+      if (value === undefined) continue;
+
+      const segments = column.split('.').filter(Boolean);
+      if (segments.length === 0) continue;
+      let target: Record<string, any> = selected;
+      for (const segment of segments.slice(0, -1)) {
+        const current = target[segment];
+        if (current == null || typeof current !== 'object' || Array.isArray(current)) {
+          target[segment] = {};
+        }
+        target = target[segment];
+      }
+      target[segments[segments.length - 1]] = value;
+    }
+    return selected;
   }
 
   private applyFilters(

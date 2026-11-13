@@ -25,9 +25,34 @@
 //-----------------------------------------------------------------------------
 // 
 
+/**
+ * Error raised by application-level operations.
+ *
+ * @example
+ * ```ts
+ * try {
+ *   getApp("missing");
+ * } catch (error) {
+ *   if (error instanceof FusabaseError) console.error(error.code);
+ * }
+ * ```
+ */
 export class FusabaseError extends Error {
+/** Describes the public `code` value. */
   code: string;
 
+  /**
+   * Creates an application-level error.
+   *
+   * @param code - Stable error-code suffix.
+   * @param message - Human-readable explanation of the failure.
+   * @param stack - Optional stack trace to preserve.
+   * @returns The error instance.
+   * @example
+   * ```ts
+   * throw new FusabaseError("invalid-config", "Configuration is invalid");
+   * ```
+   */
   constructor(code: string, message: string, stack?: string) {
     super(message);
     this.code = 'app/' + code;

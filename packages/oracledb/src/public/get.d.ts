@@ -131,8 +131,9 @@ export declare function getDocFromServer<
  *          the aggregate results.
  *
  * @example
- * import { collection, query, where, getAggregateFromServer, sum, average } from "fusabase/oracledb";
- * import { db } from "./fusabase.js";
+ * import { collection, getAggregateFromServer, getOracledb, query, sum, average, where } from "fusabase/oracledb";
+ *
+ * const db = getOracledb(app);
  *
  * async function getOrderStats() {
  *   // Define a query over the "orders" collection for completed orders
@@ -174,8 +175,9 @@ export declare function getAggregateFromServer<AggregateSpecType extends Aggrega
  *          which contains the count result under the alias `count`.
  *
  * @example
- * import { collection, query, where, getCountFromServer } from "fusabase/oracledb";
- * import { db } from "./fusabase.js";
+ * import { collection, getCountFromServer, getOracledb, query, where } from "fusabase/oracledb";
+ *
+ * const db = getOracledb(app);
  *
  * async function getCompletedOrderCount() {
  *   // Define a query for completed orders

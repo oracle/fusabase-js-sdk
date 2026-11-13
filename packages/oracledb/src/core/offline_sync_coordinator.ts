@@ -25,15 +25,19 @@
 //-----------------------------------------------------------------------------
 // 
 
-import { CollectionReference, Query } from '../collection/reference.js';
+import { CollectionReference, DualityViewColReference, Query } from '../collection/reference.js';
 import { QuerySnapshot } from '../collection/snapshot.js';
-import { DocumentReference } from '../document/reference.js';
+import { DocumentReference, DualityViewDocReference } from '../document/reference.js';
 import { DocumentSnapshot } from '../document/snapshot.js';
 import type { OfflineWriteBatchSource, OfflineWriteMutation } from '../model/index.js';
 
+/** Describes the public `ListenOptions` value. */
 export type ListenOptions = {
+/** Describes the public `includeMetadataChanges` value. */
   includeMetadataChanges?: boolean;
+/** Describes the public `source` value. */
   source?: 'default' | 'cache';
+/** Describes the public `waitForSyncWhenOnline` value. */
   waitForSyncWhenOnline?: boolean;
 };
 
@@ -44,12 +48,15 @@ export type ListenObserver<T> = {
 
 export type Unsubscribe = () => void;
 
+/** Describes the public `ReadSource` value. */
 export type ReadSource = 'default' | 'cache' | 'server';
 
 export type ListenTarget<AppModelType = any> =
   | Query<AppModelType, any>
   | CollectionReference<AppModelType, any>
-  | DocumentReference<AppModelType, any>;
+  | DualityViewColReference<AppModelType, any>
+  | DocumentReference<AppModelType, any>
+  | DualityViewDocReference<AppModelType, any>;
 
 export type SnapshotForTarget<AppModelType = any> =
   | QuerySnapshot<AppModelType, any>
@@ -63,19 +70,19 @@ export type OfflineSyncCoordinatorDelegate = {
     observer: ListenObserver<SnapshotForTarget<AppModelType>>
   ): Unsubscribe | null;
   getDocument<AppModelType>(
-    ref: DocumentReference<AppModelType>,
+    ref: DocumentReference<AppModelType> | DualityViewDocReference<AppModelType>,
     source?: ReadSource
   ): Promise<DocumentSnapshot<AppModelType>>;
   getDocuments<AppModelType>(
-    query: Query<AppModelType, any> | CollectionReference<AppModelType, any>,
+    query: Query<AppModelType, any> | CollectionReference<AppModelType, any> | DualityViewColReference<AppModelType, any>,
     source?: ReadSource
   ): Promise<QuerySnapshot<AppModelType, any>>;
   waitForPendingWrites(): Promise<void>;
   resumeNetwork(): Promise<void>;
   pauseNetwork(): Promise<void>;
-  hasPendingWritesForDocument(ref: DocumentReference<any, any>): Promise<boolean>;
+  hasPendingWritesForDocument(ref: DocumentReference<any, any> | DualityViewDocReference<any, any>): Promise<boolean>;
   getPendingCacheSnapshotForQuery<AppModelType>(
-    query: Query<AppModelType, any> | CollectionReference<AppModelType, any>
+    query: Query<AppModelType, any> | CollectionReference<AppModelType, any> | DualityViewColReference<AppModelType, any>
   ): Promise<QuerySnapshot<AppModelType, any> | null>;
   cacheDocumentSnapshot(snapshot: DocumentSnapshot<any, any>): Promise<void>;
   cacheQuerySnapshot(snapshot: QuerySnapshot<any, any>): Promise<void>;
@@ -100,14 +107,14 @@ export class OfflineSyncCoordinator {
   }
 
   getDocument<AppModelType>(
-    ref: DocumentReference<AppModelType>,
+    ref: DocumentReference<AppModelType> | DualityViewDocReference<AppModelType>,
     source: ReadSource = 'default'
   ): Promise<DocumentSnapshot<AppModelType>> {
     return this.delegate.getDocument(ref, source);
   }
 
   getDocuments<AppModelType>(
-    query: Query<AppModelType, any> | CollectionReference<AppModelType, any>,
+    query: Query<AppModelType, any> | CollectionReference<AppModelType, any> | DualityViewColReference<AppModelType, any>,
     source: ReadSource = 'default'
   ): Promise<QuerySnapshot<AppModelType, any>> {
     return this.delegate.getDocuments(query, source);
@@ -125,12 +132,12 @@ export class OfflineSyncCoordinator {
     return this.delegate.pauseNetwork();
   }
 
-  hasPendingWritesForDocument(ref: DocumentReference<any, any>): Promise<boolean> {
+  hasPendingWritesForDocument(ref: DocumentReference<any, any> | DualityViewDocReference<any, any>): Promise<boolean> {
     return this.delegate.hasPendingWritesForDocument(ref);
   }
 
   getPendingCacheSnapshotForQuery<AppModelType>(
-    query: Query<AppModelType, any> | CollectionReference<AppModelType, any>
+    query: Query<AppModelType, any> | CollectionReference<AppModelType, any> | DualityViewColReference<AppModelType, any>
   ): Promise<QuerySnapshot<AppModelType, any> | null> {
     return this.delegate.getPendingCacheSnapshotForQuery(query);
   }

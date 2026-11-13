@@ -55,7 +55,12 @@ export function count(
  * @returns An AggregateField<number>
  * @example
  * ```ts
- * const total = sum('amount');
+ * const total = sum("amount");
+ * ```
+ *
+ * @example Nested FieldPath
+ * ```ts
+ * const total = sum(new FieldPath("invoice", "amount"));
  * ```
  */
 export function sum(
@@ -73,7 +78,12 @@ export function sum(
  * @returns An AggregateField<number | null>
  * @example
  * ```ts
- * const mean = average('score');
+ * const mean = average("amount");
+ * ```
+ *
+ * @example Nested FieldPath
+ * ```ts
+ * const mean = average(new FieldPath("invoice", "amount"));
  * ```
  */
 export function average(
@@ -89,7 +99,7 @@ export function average(
  * @returns `true` if equal, otherwise `false`.
  * @example
  * ```ts
- * const same = aggregateFieldEqual(sum('amount'), sum('amount'));
+ * const same = aggregateFieldEqual(count(), count());
  * ```
  */
 export function aggregateFieldEqual(
