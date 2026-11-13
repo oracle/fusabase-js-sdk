@@ -2,7 +2,7 @@
   <img src="assets/fusabase-color.svg" alt="Fusabase logo" width="180" />
 </p>
 
-# Oracle Backend with Firebase APIs (Fusabase) JavaScript SDK
+# Fusabase JavaScript SDK
 
 Fusabase is a modular JavaScript SDK for Oracle Backend with Firebase APIs. It
 provides Firebase-compatible application initialization, authentication,
