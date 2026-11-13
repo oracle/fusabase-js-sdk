@@ -35,13 +35,10 @@ import { _assertServerReadable } from "./offline.js";
  * @param db - Oracledb or Oracledb instance.
  * @param updateFunction - Function to execute within the transaction.
  * @param options - Optional configuration for transaction, e.g. { maxAttempts }
- * @returns A promise resolving to the value returned by `updateFunction`.
+ * @returns A promise that resolves to the value returned by `updateFunction`.
  * @example
  * ```ts
- * await runTransaction(db, async transaction => {
- *   const snapshot = await transaction.get(counter);
- *   transaction.update(counter, { value: snapshot.data().value + 1 });
- * });
+ * await runTransaction(database, async transaction => transaction.get(taskRef));
  * ```
  */
 export async function runTransaction<T>(
@@ -76,9 +73,7 @@ export async function runTransaction<T>(
  * @returns WriteBatch instance for batching write operations.
  * @example
  * ```ts
- * const batch = writeBatch(db);
- * batch.set(profile, { name: 'Ada' });
- * await batch.commit();
+ * const batch = writeBatch(database);
  * ```
  */
 export function writeBatch(

@@ -47,7 +47,8 @@ const fusabaseConfig = {
 const app = initializeApp(fusabaseConfig);
 ```
 
-`auth_type` values: `base`, `ldap_s`, `base_s`, `idcs`.
+`auth_type` values: `base`, `ldap`, `idcs`, `e-idcs`. `e-idcs` is an
+alias for `idcs` and uses the same identity-domain authentication flow.
 
 ## Notes
 

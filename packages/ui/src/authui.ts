@@ -26,7 +26,7 @@
 
 // BaaS imports
 import { initializeApp, App } from "../../app/src/index.js";
-import { FusabaseOptions } from "../../app/src/public-types.js";
+import { FusabaseConfig } from "../../app/src/public-types.js";
 import {
   getAuth,
   signInWithPopup,
@@ -56,21 +56,31 @@ interface AuthUIConfig {
   signInSuccessUrl?: string;
 }
 
-/**
- * Provides a browser sign-in user interface.
- *
- * @example
- * ```ts
- * const ui = new authUI.AuthUI(app);
- * ui.start('#auth-root', { signInOptions: ['google'] });
- * ```
- */
 export const authUI: any = {
+  /**
+   * Renders a browser sign-in interface for an application.
+   *
+   * @example
+   * ```ts
+   * const ui = new authUI.AuthUI(app);
+   * ui.start("#sign-in", { signInOptions: ["email"] });
+   * ```
+   */
   AuthUI: class {
     private app?: App;
     private auth: Auth;
 
-    constructor(appOrConfig: App | Auth | FusabaseOptions) {
+    /**
+     * Creates a browser sign-in interface.
+     *
+     * @param appOrConfig - Application, authentication service, or application configuration.
+     * @returns The sign-in interface instance.
+     * @example
+     * ```ts
+     * const ui = new authUI.AuthUI(app);
+     * ```
+     */
+    constructor(appOrConfig: App | Auth | FusabaseConfig) {
       if (appOrConfig instanceof App) {
         this.app = appOrConfig;
         this.auth = getAuth(this.app);
@@ -82,12 +92,40 @@ export const authUI: any = {
       }
     }
 
+    private validateSignInSuccessUrl(value: string): string {
+      const url = new URL(value, window.location.origin);
+      if (
+        (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+        url.origin !== window.location.origin ||
+        url.username ||
+        url.password
+      ) {
+        throw new Error('Invalid sign-in success URL');
+      }
+      return url.href;
+    }
+
+    /**
+     * Renders and starts the sign-in interface in a page container.
+     *
+     * @param containerId - CSS selector or container element that receives the interface.
+     * @param config - Sign-in options, callbacks, and optional success URL.
+     * @returns Nothing.
+     * @example
+     * ```ts
+     * ui.start("#sign-in", { signInOptions: ["email"] });
+     * ```
+     */
     start(containerId: string | HTMLElement, config: AuthUIConfig) {
       const container: HTMLElement | null = typeof containerId === 'string'
         ? document.querySelector(containerId)
         : containerId;
 
       if (!container) throw new Error("Container not found");
+
+      const signInSuccessUrl = config.signInSuccessUrl
+        ? this.validateSignInSuccessUrl(config.signInSuccessUrl)
+        : null;
 
       // Inject styles
       const style: HTMLStyleElement = document.createElement("style");
@@ -299,13 +337,13 @@ export const authUI: any = {
           let cRes: boolean = true;
           if (config && config.callbacks && config.callbacks.signInSuccessWithAuthResult) {
             let sUrl: string | null = null;
-            if (config && config.signInSuccessUrl) {
-              sUrl = config.signInSuccessUrl;
+            if (signInSuccessUrl) {
+              sUrl = signInSuccessUrl;
             }
             cRes = config.callbacks.signInSuccessWithAuthResult(res, sUrl);
           }
-          if (cRes && config && config.signInSuccessUrl) {
-            window.location.assign(config.signInSuccessUrl);
+          if (cRes && signInSuccessUrl) {
+            window.location.assign(signInSuccessUrl);
           }
         } catch (err) {
           errorBox.textContent = "Error! " + (err as Error).message;
@@ -319,13 +357,13 @@ export const authUI: any = {
           let cRes: boolean = true;
           if (config && config.callbacks && config.callbacks.signInSuccessWithAuthResult) {
             let sUrl: string | null = null;
-            if (config && config.signInSuccessUrl) {
-              sUrl = config.signInSuccessUrl;
+            if (signInSuccessUrl) {
+              sUrl = signInSuccessUrl;
             }
             cRes = config.callbacks.signInSuccessWithAuthResult(res, sUrl);
           }
-          if (cRes && config && config.signInSuccessUrl) {
-            window.location.assign(config.signInSuccessUrl);
+          if (cRes && signInSuccessUrl) {
+            window.location.assign(signInSuccessUrl);
           }
         } catch (err) {
           errorBox.textContent = "Error! " + (err as Error).message;
@@ -339,13 +377,13 @@ export const authUI: any = {
           let cRes: boolean = true;
           if (config && config.callbacks && config.callbacks.signInSuccessWithAuthResult) {
             let sUrl: string | null = null;
-            if (config && config.signInSuccessUrl) {
-              sUrl = config.signInSuccessUrl;
+            if (signInSuccessUrl) {
+              sUrl = signInSuccessUrl;
             }
             cRes = config.callbacks.signInSuccessWithAuthResult(res, sUrl);
           }
-          if (cRes && config && config.signInSuccessUrl) {
-            window.location.assign(config.signInSuccessUrl);
+          if (cRes && signInSuccessUrl) {
+            window.location.assign(signInSuccessUrl);
           }
         } catch (err) {
           errorBox.textContent = "Error! " + (err as Error).message;
@@ -394,13 +432,13 @@ export const authUI: any = {
           let cRes: boolean = true;
           if (config && config.callbacks && config.callbacks.signInSuccessWithAuthResult) {
             let sUrl: string | null = null;
-            if (config && config.signInSuccessUrl) {
-              sUrl = config.signInSuccessUrl;
+            if (signInSuccessUrl) {
+              sUrl = signInSuccessUrl;
             }
             cRes = config.callbacks.signInSuccessWithAuthResult(res, sUrl);
           }
-          if (cRes && config && config.signInSuccessUrl) {
-            window.location.assign(config.signInSuccessUrl);
+          if (cRes && signInSuccessUrl) {
+            window.location.assign(signInSuccessUrl);
           }
         } catch (err) {
           errorBox.textContent = "Error! " + (err as Error).message;
@@ -414,13 +452,13 @@ export const authUI: any = {
           let cRes: boolean = true;
           if (config && config.callbacks && config.callbacks.signInSuccessWithAuthResult) {
             let sUrl: string | null = null;
-            if (config && config.signInSuccessUrl) {
-              sUrl = config.signInSuccessUrl;
+            if (signInSuccessUrl) {
+              sUrl = signInSuccessUrl;
             }
             cRes = config.callbacks.signInSuccessWithAuthResult(res, sUrl);
           }
-          if (cRes && config && config.signInSuccessUrl) {
-            window.location.assign(config.signInSuccessUrl);
+          if (cRes && signInSuccessUrl) {
+            window.location.assign(signInSuccessUrl);
           }
         } catch (err) {
           errorBox.textContent = "Error! " + (err as Error).message;

@@ -26,7 +26,7 @@
 // 
 
 import { FusabaseError } from "./errors.js";
-import { App, FusabaseOptions } from "./public-types.js"; // your options interface
+import { App, BackendType, FusabaseConfig, FusabaseOptions } from "./public-types.js";
 import {LogLevel} from "../../logger/LogLevel.js";
 import { getOrCreateBrowserInstanceId } from './instance-id.js';
 import { Component } from './component.js';
@@ -38,13 +38,23 @@ interface ErrorWithStatus extends Error {
 
 export const _components = new Map<string, Component<any>>();
 
+const RESERVED_APP_NAMES = new Set(['__proto__', 'constructor', 'prototype']);
+
+function validateAppName(name: unknown): asserts name is string {
+  if (typeof name !== 'string' || name.trim().length === 0 || RESERVED_APP_NAMES.has(name)) {
+    const error = new Error('Invalid app name') as ErrorWithStatus;
+    error.status = 400;
+    throw appErrorHandler(error);
+  }
+}
+
 export function _registerComponent<T>(component: Component<T>): boolean {
   if (_components.has(component.name)) {
     return false;
   }
   _components.set(component.name, component);
   for (const app of Object.values(fusabase._apps)) {
-    if (app instanceof App) {
+    if (app instanceof App && !app.isDeleted) {
       app.container.addComponent(component);
     }
   }
@@ -55,8 +65,8 @@ export function _getProvider<T>(app: App, name: string) {
   return app.container.getProvider<T>(name);
 }
 
-export function _removeServiceInstance(app: App, name: string, instanceIdentifier = '[DEFAULT]'): void {
-  app.container.getProvider(name).clearInstance(instanceIdentifier);
+export function _removeServiceInstance(app: App, name: string, instanceIdentifier = '[DEFAULT]'): Promise<void> {
+  return app.container.getProvider(name).clearInstance(instanceIdentifier);
 }
 
 // typeStrings for argCheck
@@ -97,6 +107,7 @@ export const errorMessages = {
   invalidOracledbVersion: 'Invalid oracledb version',
   invalidChunkSize: 'Invalid chunk size',
   invalidMaxUploadBytes: 'Invalid max upload bytes',
+  invalidBackendType: 'Invalid backend type',
   appNotInitialized: 'App is not initialized. Use initializeApp() first.',
   valueCannotBeNull: 'Value cannot be null or undefined',
   typeMismatch: 'Expected one of [%expected%] but got %actual%',
@@ -195,49 +206,64 @@ function argCheck<T>(
   return value;
 }
 
-function pickConfigValue(config: Record<string, any>, snakeKey: string, camelKey: string): any {
-  return Object.prototype.hasOwnProperty.call(config, snakeKey)
-    ? config[snakeKey]
-    : config[camelKey];
-}
-
-function normalizeAppConfig(config: Record<string, any>): Record<string, any> {
+function normalizeAppConfig(config: FusabaseConfig): Omit<FusabaseOptions, 'backendType'> {
   return {
-    ordsHost: pickConfigValue(config, 'ords_host', 'ordsHost'),
+    ordsHost: config.ords_host,
     schema: config.schema,
-    appType: pickConfigValue(config, 'app_type', 'appType'),
-    appID: pickConfigValue(config, 'app_id', 'appID'),
-    projectID: pickConfigValue(config, 'project_id', 'projectID'),
-    objsType: pickConfigValue(config, 'objs_type', 'objsType'),
-    storageBucket: pickConfigValue(config, 'storage_bucket', 'storageBucket'),
-    authType: pickConfigValue(config, 'auth_type', 'authType'),
-    authID: pickConfigValue(config, 'auth_id', 'authID'),
-    idcsDomainURL: pickConfigValue(config, 'idcs_domain_url', 'idcsDomainURL'),
-    useSocket: pickConfigValue(config, 'use_socket', 'useSocket'),
-    longPollingInterval: pickConfigValue(config, 'long_polling_interval', 'longPollingInterval'),
-    version: config.version,
-    appTrustToken: config.appTrustToken,
-    chunkSize: pickConfigValue(config, 'upload_chunk_size', 'chunkSize'),
-    maxUploadBytes: pickConfigValue(config, 'max_upload_bytes', 'maxUploadBytes'),
+    appName: config.app_name,
+    appType: config.app_type,
+    appID: config.app_id,
+    projectID: config.project_id,
+    objsType: config.objs_type,
+    storageBucket: config.storage_bucket,
+    authType: config.auth_type,
+    authID: config.auth_id,
+    useSocket: config.use_socket,
+    longPollingInterval: config.long_polling_interval,
+    chunkSize: config.upload_chunk_size,
+    maxUploadBytes: config.max_upload_bytes,
   };
 }
 
 // -------------------- SOBa Core Object --------------------
 const fusabase = {
 
-  _apps: {} as Record<string, App>,
+  _apps: Object.create(null) as Record<string, App>,
 
   get apps(): App[] {
     const appsArr: App[] = [];
     Object.entries(this._apps).forEach(([_, value]) => {
-        appsArr.push(value as App);
+        if (!value.isDeleted) {
+          appsArr.push(value as App);
+        }
     });
     return appsArr;
     },
 
 
-  initializeApp(options_sdk: Record<string, any>, name: string = "[DEFAULT]"): App {
+  initializeApp(
+    options_sdk: FusabaseConfig,
+    name: string = "[DEFAULT]",
+    backendTypeOverride?: BackendType | null
+  ): App {
+    validateAppName(name);
+    if (Object.hasOwn(fusabase._apps, name)) {
+      const error = new Error(`App named "${name}" has already been initialized.`) as ErrorWithStatus;
+      error.status = 409;
+      throw appErrorHandler(error);
+    }
     const config = normalizeAppConfig(options_sdk);
+    const requestedBackendType = backendTypeOverride;
+    const backendType = requestedBackendType == null
+      ? "COLLECTION"
+      : requestedBackendType;
+
+    if (backendType !== "COLLECTION" && backendType !== "RELATIONAL") {
+      const error = new Error(getErrorMessage('invalidBackendType')) as ErrorWithStatus;
+      error.status = 400;
+      throw appErrorHandler(error);
+    }
+    const normalizedBackendType = backendType === "RELATIONAL" ? "relational" : "collection";
     argCheck(config.ordsHost, getErrorMessage('invalidOrdsHost'), true, [typeStrings.STRING]);
     argCheck(config.schema, getErrorMessage('invalidSchema'), true, [typeStrings.STRING]);
     argCheck(config.appID, getErrorMessage('invalidAppId'), true, [typeStrings.STRING]);
@@ -248,40 +274,39 @@ const fusabase = {
     argCheck(config.appType, "Invalid app type", true, [typeStrings.STRING]);
 
     argCheck(config.authID, getErrorMessage('invalidAuthId'), true, [typeStrings.STRING]);
-    if (String(config.authType).toLowerCase() === "idcs") {
-      argCheck(config.idcsDomainURL, "Invalid IDCS domain URL", true, [typeStrings.STRING]);
+    const authType = String(config.authType).toLowerCase();
+    // e-idcs uses the same identity-domain implementation and endpoints as IDCS.
+    const normalizedAuthType = authType === "e-idcs" ? "idcs" : authType;
+    if (normalizedAuthType === "idcs") {
+      argCheck(config.idcsDomainURL, "Invalid IDCS domain URL", false, [typeStrings.STRING]);
     }
 
     argCheck(config.useSocket, getErrorMessage('invalidSocketValue'), false, [typeStrings.BOOL]);
     argCheck(config.longPollingInterval, getErrorMessage('invalidPollingInterval'), false, [typeStrings.INT]);
-    argCheck(config.version, getErrorMessage('invalidOracledbVersion'), false, [typeStrings.INT]);
     argCheck(config.chunkSize, getErrorMessage('invalidChunkSize'), false, [typeStrings.INT]);
     argCheck(config.maxUploadBytes, getErrorMessage('invalidMaxUploadBytes'), false, [typeStrings.INT]);
 
     const options: FusabaseOptions = {
+      backendType: normalizedBackendType,
       ordsHost: config.ordsHost,
       schema: config.schema,
+      appName: config.appName,
       appType: String(config.appType).toLowerCase(),
       appID: config.appID,
       projectID: config.projectID,
       objsType: String(config.objsType).toLowerCase(),
       storageBucket: config.storageBucket,
-      authType: String(config.authType).toLowerCase(),
+      authType: normalizedAuthType,
       authID: config.authID,
       idcsDomainURL: config.idcsDomainURL,
-      useSocket: config.useSocket === true,
+      useSocket: config.useSocket !== false,
       longPollingInterval: config.longPollingInterval
         ? config.longPollingInterval
         : 29,
-      version: config.version ? config.version : 2,
-      appTrustToken: config.appTrustToken ? config.appTrustToken : null,
+      version: 2,
       chunkSize: config.chunkSize ? config.chunkSize : 16 * 1024 * 1024,
       maxUploadBytes: config.maxUploadBytes,
     };
-
-    if (typeof config.appTrustToken === 'string' && config.appTrustToken) {
-      (options as any).appTrustToken = config.appTrustToken;
-    }
 
     const appInstance = new App(options, name);
     for (const component of _components.values()) {
@@ -296,14 +321,19 @@ const fusabase = {
 
     appInstance._intializeAfterConfig();
     fusabase._apps[name] = appInstance;
-    fusabase._apps["[DEFAULT]"] = appInstance;
 
     return appInstance;
   },
 
   app(name: string = "[DEFAULT]"): App {
+    validateAppName(name);
+    if (!Object.hasOwn(this._apps, name)) {
+      const error = new Error(getErrorMessage('appNotInitialized')) as ErrorWithStatus;
+      error.status = 404;
+      throw appErrorHandler(error);
+    }
     const appInstance = this._apps[name];
-    if (!appInstance) {
+    if (appInstance.isDeleted) {
       const error = new Error(getErrorMessage('appNotInitialized')) as ErrorWithStatus;
       error.status = 404;
       throw appErrorHandler(error);
@@ -341,9 +371,21 @@ const fusabase = {
     return app_.oracledb();
   },
 
+  relational(app?: App) {
+    const app_ = app ?? this.app();
+    if (app_ == null) {
+      const error = new Error(getErrorMessage('appNotInitialized')) as ErrorWithStatus;
+      error.status = 404;
+      throw appErrorHandler(error);
+    }
+    return app_.relational();
+  },
+
   setLogLevel(log: LogLevel): void {
     for (const instance of Object.values(this._apps) as App[]) {
+      if (!instance.isDeleted) {
         instance.logLevel = log;
+      }
     }
   },
 

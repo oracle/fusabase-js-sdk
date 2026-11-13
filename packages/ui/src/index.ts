@@ -27,5 +27,13 @@
 
 import { authUI } from "./authui.js";
 
-
+/**
+ * Provides the browser sign-in user-interface factory.
+ *
+ * @example
+ * ```ts
+ * const ui = new authUI.AuthUI(app);
+ * ui.start("#sign-in", { signInOptions: ["email"] });
+ * ```
+ */
 export {authUI};

@@ -23,7 +23,7 @@
 // limitations under the License.
 //
 //-----------------------------------------------------------------------------
-// 
+//
 
 import { LogLevel } from '../../../logger/LogLevel.js';
 import { QueryFieldFilterConstraint,QueryCompositeFilterConstraint } from '../collection/constraint.js';
@@ -39,6 +39,7 @@ import { fusabaseFetch } from '../../../app/src/fusabase-fetch.js';
 import { SparseEmbedding, VectorSearchQuery } from '../types/vector.js';
 
 // Error code mapping for Oracledb errors
+/** Describes the public `OracledbErrorCode` value. */
 export const OracledbErrorCode = Object.freeze({
   INVALID_ARGUMENT: 'invalid-argument',
   UNAUTHENTICATED: 'unauthenticated',
@@ -57,13 +58,36 @@ export type OracledbErrorCode =
   | 'not-found'
   | 'network-error'
   | 'unknown';
-  
 
+
+/**
+ * Error raised by a document-data operation.
+ *
+ * @example
+ * ```ts
+ * if (error instanceof OracledbError) console.error(error.code);
+ * ```
+ */
 export class OracledbError extends Error {
   /** Oracledb error code, e.g., "oracledb/invalid-argument" */
   code: string = 'oracledb/';
+/** Describes the public `status` value. */
   status: number = 200;
 
+/**
+ * Constructs a OracledbError instance with the supplied configuration.
+ *
+ * @param code - The code accepted by this operation.
+ * @param message - A human-readable error message.
+ * @param stack - The stack accepted by this operation.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { OracledbError } from "fusabase/oracledb";
+ * const result = new OracledbError(value, value, value);
+ * void result;
+ * ```
+ */
   constructor(code: OracledbErrorCode, message?: string, stack?: string) {
     super(message);
     this.code = this.code + code;
@@ -764,7 +788,8 @@ export class QueryHelper {
     docRef: any,
     document: any,
     access_token?: string,
-    trans_obj?: any
+    trans_obj?: any,
+    conditions?: any[]
   ): Promise<any> {
     let url = docRef.oracledb.url;
     if (
@@ -775,15 +800,11 @@ export class QueryHelper {
       url += "v1/";
     }
     url += endpoints.UPDATE_DOC + `?apiKey=${this.#app.options.appID}`;
-    
-    const memberExists = (obj: any, member: string) =>
-      Object.prototype.hasOwnProperty.call(obj, member);
 
-    const body: any = { 
-      data: document,
-      conditions: (memberExists(docRef, '_conditions') ?
-                docRef._conditions : []),
-    };
+    const body: any = { data: document };
+    if (conditions !== undefined) {
+      body.conditions = conditions;
+    }
 
     if (isDualityView(docRef)) {
       const tokens = docRef._path;
@@ -1229,7 +1250,7 @@ export class Utils {
         key = key.substring(14);
         key = parseInt(key);
       }
-      object = object[key];
+      object = Object.prototype.hasOwnProperty.call(object, key) ? object[key] : undefined;
     }
     return object;
   }

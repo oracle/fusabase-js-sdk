@@ -25,9 +25,23 @@
 //-----------------------------------------------------------------------------
 // 
 
+/** Represents the canonical key of a document. @example `const key = OracledbDocumentKey.fromPath("tasks/task-1");` */
 export class OracledbDocumentKey {
+/** Describes the public `segments` value. */
   readonly segments: string[];
 
+/**
+ * Constructs a OracledbDocumentKey instance with the supplied configuration.
+ *
+ * @param path - The relative resource path.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { OracledbDocumentKey } from "fusabase/oracledb";
+ * const result = new OracledbDocumentKey("example");
+ * void result;
+ * ```
+ */
   constructor(path: string | string[]) {
     this.segments = Array.isArray(path) ? [...path] : path.split('/').filter(Boolean);
   }
@@ -36,10 +50,34 @@ export class OracledbDocumentKey {
     return this.segments.join('/');
   }
 
+/**
+ * Executes the isEqual operation for this public SDK type.
+ *
+ * @param other - The value to compare with this value.
+ * @returns The result produced by `isEqual`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { OracledbDocumentKey } from "fusabase/oracledb";
+ * const result = new OracledbDocumentKey("tasks/task-1").isEqual(new OracledbDocumentKey("tasks/task-1"));
+ * void result;
+ * ```
+ */
   isEqual(other: OracledbDocumentKey): boolean {
     return this.path === other.path;
   }
 
+/**
+ * Executes the fromPath operation for this public SDK type.
+ *
+ * @param path - The relative resource path.
+ * @returns The result produced by `fromPath`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { OracledbDocumentKey } from "fusabase/oracledb";
+ * const result = OracledbDocumentKey.fromPath("example");
+ * void result;
+ * ```
+ */
   static fromPath(path: string): OracledbDocumentKey {
     return new OracledbDocumentKey(path);
   }

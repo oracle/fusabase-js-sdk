@@ -36,6 +36,10 @@ import { authErrorHandler,argCheck,typeStrings, AuthError, ErrorCodeMessage } fr
  * @param email - The email to which the reset link should be sent.
  * @param actionCodeSettings - Optional action code settings.
  * @returns A promise that resolves when the email has been sent.
+ * @example
+ * ```ts
+ * await sendPasswordResetEmail(auth, "person@example.com");
+ * ```
  */
 export function sendPasswordResetEmail(
   auth: Auth,
@@ -57,6 +61,10 @@ export function sendPasswordResetEmail(
  * @param auth - The Auth instance.
  * @param code - The password reset code.
  * @returns A promise resolving with the email address associated with the code.
+ * @example
+ * ```ts
+ * const email = await verifyPasswordResetCode(auth, code);
+ * ```
  */
 export function verifyPasswordResetCode(
   auth: Auth,
@@ -84,11 +92,15 @@ export function verifyPasswordResetCode(
  * ```
  *
  * @param auth - The Auth instance.
- * @param oobCode - The out-of-band code from the password reset email link.
+ * @param code - The out-of-band code from the password reset email link.
  * @param newPassword - The user's new password.
  *
  * @returns A promise that resolves when the password has been reset.
  *          Rejects with an error if the code is invalid or expired.
+ * @example
+ * ```ts
+ * await confirmPasswordReset(auth, code, newPassword);
+ * ```
  */
 export function confirmPasswordReset(
   auth: Auth,

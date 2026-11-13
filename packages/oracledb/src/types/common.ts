@@ -40,10 +40,10 @@ export declare type QueryType = 'query' | 'collection' | 'namedQuery' | 'duality
 
 export declare type QueryFilterConstraint = QueryFieldFilterConstraint | QueryCompositeFilterConstraint;
 /**
- * AggregateFieldType defines the possible aggregation operations
- * available for Oracledb queries, such as `count`, `sum`, and `average`.
+ * AggregateFieldType defines the backend aggregation operations
+ * available for Oracledb queries: `count`, `sum`, and `avg`.
  */
-export type AggregateFieldType = 'count' | 'sum' | 'average';
+export type AggregateFieldType = 'count' | 'sum' | 'avg';
 
 /**
  * A utility type that adds a prefix to the keys of an object, transforming
@@ -69,7 +69,7 @@ export type AggregateType = AggregateFieldType;
  * For example, you might have:
  *   - count: { countField: AggregateField<'count'> },
  *   - sum: { sumField: AggregateField<'sum'> },
- * Each field in the specification will be an AggregateField that can either be `count`, `sum`, or `average`.
+ * Each field in the specification will be an AggregateField that can either be `count`, `sum`, or `avg`.
  * 
  * @example
  * const aggregationSpec: AggregateSpec = {

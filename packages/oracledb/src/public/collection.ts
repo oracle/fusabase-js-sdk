@@ -42,7 +42,17 @@ import { Query } from "../collection/reference.js";
  * @returns CollectionReference<DocumentData, DocumentData>
  * @example
  * ```ts
- * const users = collection(db, 'users');
+ * const tasks = collection(database, "tasks");
+ * ```
+ *
+ * @example Create a subcollection from a document reference.
+ * ```ts
+ * const comments = collection(taskRef, "comments");
+ * ```
+ *
+ * @example Create a nested collection from a collection reference.
+ * ```ts
+ * const archived = collection(tasks, "task-1", "archive");
  * ```
  */
 export function collection(
@@ -84,14 +94,14 @@ export function collection(
 }
 
 /**
- * Returns a reference to a duality view collection.
+ * Creates a reference to a duality-view collection.
  *
- * @param db - The database service instance.
- * @param name - The duality-view collection name.
- * @returns A duality-view collection reference.
+ * @param db - Document-data service that owns the view.
+ * @param name - Duality-view collection name.
+ * @returns The duality-view collection reference.
  * @example
  * ```ts
- * const orders = dualityViewCollection(db, 'ORDERS');
+ * const view = dualityViewCollection(database, "orders");
  * ```
  */
 export function dualityViewCollection(
@@ -113,15 +123,20 @@ export function dualityViewCollection(
 }
 
 /**
- * Returns a reference to a duality view document.
+ * Creates a reference to a document in a duality view.
  *
- * @param db - The database service or duality-view collection reference.
- * @param path - A document identifier or path.
- * @param pathSegments - Additional path segments.
- * @returns A duality-view document reference.
+ * @param db - Document-data service or duality-view collection reference.
+ * @param path - Document path or identifier.
+ * @param pathSegments - Additional document-path segments.
+ * @returns The duality-view document reference.
  * @example
  * ```ts
- * const order = dualityViewDoc(db, 'ORDERS', '42');
+ * const order = dualityViewDoc(database, "orders/1001");
+ * ```
+ *
+ * @example Create a document reference from a duality-view collection.
+ * ```ts
+ * const order = dualityViewDoc(ordersView, "1001");
  * ```
  */
 export function dualityViewDoc<
@@ -173,10 +188,10 @@ export function dualityViewDoc<
  * Returns a `CollectionReference` referring to a collection group with the given name.
  * @param oracledb - An Oracledb instance.
  * @param name - The collection group name.
- * @returns A query spanning collections with the supplied name.
+ * @returns A query spanning collections with the requested name.
  * @example
  * ```ts
- * const allMessages = collectionGroup(db, 'messages');
+ * const tasks = collectionGroup(database, "tasks");
  * ```
  */
 export function collectionGroup(

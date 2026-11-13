@@ -26,9 +26,8 @@
 // 
 
 import { expect } from "chai";
-import { appTrustToken, options } from "./config.js";
 import {initializeApp, setLogLevel, LogLevel} from "fusabase/app";
-import { 
+import {
   getAuth, 
   createUserWithEmailAndPassword, 
   getIdToken,
@@ -41,13 +40,82 @@ import {
   Auth,
   User
 } from 'fusabase/auth';
+import { testAppConfig } from "./test_config.js";
+
+const originalFetch = globalThis.fetch.bind(globalThis);
+
+function redactValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(redactValue);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, nestedValue]) => [
+      key,
+      /authorization|password|token|secret/i.test(key) ? "[REDACTED]" : redactValue(nestedValue)
+    ]));
+  }
+  return value;
+}
+
+function formatBody(body) {
+  if (body == null) return undefined;
+  if (typeof body !== "string") return "[non-text request body]";
+
+  try {
+    return redactValue(JSON.parse(body));
+  } catch {
+    return body.length > 10_000 ? `${body.slice(0, 10_000)}...[truncated]` : body;
+  }
+}
+
+function installOrdsRequestLogger(ordsHost) {
+  const normalizedHost = new URL(ordsHost).toString();
+
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : undefined;
+    const url = typeof input === "string" || input instanceof URL ? input.toString() : request.url;
+    const method = init?.method ?? request?.method ?? "GET";
+    const body = formatBody(init?.body);
+
+    if (!url.startsWith(normalizedHost)) {
+      return originalFetch(input, init);
+    }
+
+    console.log("[ORDS request]", JSON.stringify({ method, url, body }, null, 2));
+    try {
+      const response = await originalFetch(input, init);
+      let responseBody;
+      try {
+        const text = await response.clone().text();
+        responseBody = text ? formatBody(text) : undefined;
+      } catch {
+        responseBody = "[response body unavailable]";
+      }
+      console.log("[ORDS response]", JSON.stringify({
+        method,
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        body: responseBody
+      }, null, 2));
+      return response;
+    } catch (error) {
+      console.error("[ORDS network error]", JSON.stringify({
+        method,
+        url,
+        message: error instanceof Error ? error.message : String(error)
+      }, null, 2));
+      throw error;
+    }
+  };
+}
 
 /**
  * App Trust enforcement testing (Option 1):
- * Provide a valid FUSABASE App Trust token in `.env` when App Trust needs to
- * be exercised by this integration suite.
+ * Provide a *valid* FUSABASE App Trust token via environment variable.
  *
- *   FUSABASE_APP_TRUST_TOKEN="<token>"
+ *   FUSABASE_APP_TRUST_TOKEN="<token>" npm test
  *
  * The SDK will attach it as `X-Fusabase-AppTrust` (see packages/app/src/app-trust-header.ts).
  */
@@ -64,6 +132,8 @@ describe("fusabase Auth Tests", function () {
   this.timeout(30000);
 
   let app, auth_c;
+  const options = testAppConfig;
+
   const providerid_value = "password";
   const providerid_value1 = "UserNamePassword";
 
@@ -76,12 +146,17 @@ describe("fusabase Auth Tests", function () {
   const phoneNumber2 = "1234567892";
 
   before(() => {
-    app = initializeApp(
-      appTrustToken ? { ...options, appTrustToken } : options,
-      "auth-test"
-    );
+    // Option 1: If provided, this token is automatically attached as X-Fusabase-AppTrust
+    // on eligible SDK requests.
+    const appTrustToken = process.env.FUSABASE_APP_TRUST_TOKEN;
+    const initOptions = appTrustToken ? { ...options, app_trust_token: appTrustToken } : options;
+    app = initializeApp(initOptions, "test-auth");
     setLogLevel(LogLevel.ERROR);
     auth_c = getAuth(app);
+  });
+
+  after(() => {
+    globalThis.fetch = originalFetch;
   });
 
   describe("App Initialization", () => {
@@ -95,18 +170,17 @@ describe("fusabase Auth Tests", function () {
       expect(app.options.authID).to.equal(options.auth_id);
     });
 
-    it("should include appTrustToken in app options when configured", function () {
-      if (!appTrustToken) {
-        expect((app.options || {}).appTrustToken).to.be.null;
+    it("should include appTrustToken in app options when FUSABASE_APP_TRUST_TOKEN is set", function () {
+      const tok = process.env.FUSABASE_APP_TRUST_TOKEN;
+      if (!tok) {
+        expect((app.options || {}).appTrustToken).to.be.undefined;
         return;
       }
-      expect((app.options || {}).appTrustToken).to.equal(appTrustToken);
+      expect((app.options || {}).appTrustToken).to.equal(tok);
     });
   });
 
   describe("User Lifecycle", () => {
-    let createdUser;
-
     it("should create a user with email and password", async () => {
       const res1 = await createUserWithEmailAndPassword(auth_c, email, password);
       expect(res1.user).to.exist;
@@ -119,7 +193,6 @@ describe("fusabase Auth Tests", function () {
       expect(res1.user.providerId).to.equal(providerid_value1);
       expect(res1.credential.providerId).to.equal(providerid_value);
       expect(res1.credential.signInMethod).to.equal("password");
-      createdUser = res1.user;
     });
 
     it("should sign in with email and password", async () => {
@@ -131,14 +204,14 @@ describe("fusabase Auth Tests", function () {
     });
 
     it("should update password", async () => {
-      await updatePassword(createdUser, password, newPassword);
+      await updatePassword(auth_c.currentUser, password, newPassword);
       const res3 = await signInWithEmailAndPassword(auth_c, email, newPassword);
       expect(res3.user).to.exist;
       expect(res3.user.email).to.equal(email);
     });
 
     it("should update displayName", async () => {
-      await updateProfile(createdUser, { displayName: newName1 })
+      await updateProfile(auth_c.currentUser, { displayName: newName1 })
       const res4 = await auth_c.signInWithEmailAndPassword(email, newPassword);
       expect(res4.user.displayName).to.equal(newName1);
     });

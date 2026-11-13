@@ -35,8 +35,7 @@ import { CollectionReference } from "../collection/reference.js";
 import { _listenOfflineIfEnabled } from "./offline.js";
 
 /**
- * Returns true if two snapshots are logically equal.
- *
+ * Returns true if two snapshots (QuerySnapshot or DocumentSnapshot) are logically equal.
  * @param left - A DocumentSnapshot or QuerySnapshot to compare.
  * @param right - A DocumentSnapshot or QuerySnapshot to compare.
  * @returns true if the snapshots are equal.
@@ -55,18 +54,40 @@ export function snapshotEqual<
   return left.isEqual(right as any);
 }
 
-
 /**
- * Subscribes to snapshot updates for a query, collection, or document reference.
+ * Listens for changes to a query, collection, or document.
  *
- * @param ref - The target to observe.
- * @param params - Listener options and callbacks accepted by the overloads.
+ * @param query - Query or collection to observe for this overload.
+ * @param observer - Observer that receives snapshots, errors, and completion.
  * @returns A function that stops the listener.
  * @example
  * ```ts
- * const unsubscribe = onSnapshot(users, snapshot => {
- *   console.log(snapshot.docs.length);
+ * const unsubscribe = onSnapshot(tasksQuery, snapshot => console.log(snapshot.size));
+ * unsubscribe();
+ * ```
+ *
+ * @example Use an observer object.
+ * ```ts
+ * const unsubscribe = onSnapshot(tasksQuery, {
+ *   next: snapshot => console.log(snapshot.size),
+ *   error: error => console.error(error)
  * });
+ * ```
+ *
+ * @example Include metadata changes with an observer object.
+ * ```ts
+ * const unsubscribe = onSnapshot(tasksQuery, { includeMetadataChanges: true }, {
+ *   next: snapshot => console.log(snapshot.metadata)
+ * });
+ * ```
+ *
+ * @example Use callbacks with listener options.
+ * ```ts
+ * const unsubscribe = onSnapshot(tasksQuery, { includeMetadataChanges: true },
+ *   snapshot => console.log(snapshot.size),
+ *   error => console.error(error),
+ *   () => console.log("listener closed")
+ * );
  * ```
  */
 export function onSnapshot<AppModelType, DbModelType extends DocumentData>
@@ -76,6 +97,19 @@ export function onSnapshot<AppModelType, DbModelType extends DocumentData>
     complete?: () => void;
 }): Unsubscribe;
 
+/**
+ * Listens to a query using listener options and an observer object.
+ * @param query - Query whose snapshots to observe.
+ * @param options - Listener options, including metadata-change behavior.
+ * @param observer - Object with optional next, error, and complete callbacks.
+ * @returns A function that stops the listener.
+ * @example
+ * ```ts
+ * import { onSnapshot } from "fusabase/oracledb";
+ * const unsubscribe = onSnapshot(tasksQuery, { includeMetadataChanges: true }, { next: console.log });
+ * unsubscribe();
+ * ```
+ */
 export function onSnapshot<AppModelType, DbModelType 
 extends DocumentData>(query: Query<AppModelType, DbModelType>, 
   options: SnapshotListenOptions, observer: {
@@ -84,12 +118,41 @@ extends DocumentData>(query: Query<AppModelType, DbModelType>,
     complete?: () => void;
 }): Unsubscribe;
 
+/**
+ * Listens to a query using callbacks.
+ * @param query - Query whose snapshots to observe.
+ * @param onNext - Callback that receives each query snapshot.
+ * @param onError - Optional callback that receives listener errors.
+ * @param onCompletion - Optional callback called when the listener completes.
+ * @returns A function that stops the listener.
+ * @example
+ * ```ts
+ * import { onSnapshot } from "fusabase/oracledb";
+ * const unsubscribe = onSnapshot(tasksQuery, console.log, console.error, () => console.log("complete"));
+ * unsubscribe();
+ * ```
+ */
 export function onSnapshot<AppModelType, DbModelType extends 
 DocumentData>(query: Query<AppModelType, DbModelType>, onNext: 
   (snapshot: QuerySnapshot<AppModelType, DbModelType>) => void, 
   onError?: (error: OracledbError) => void, onCompletion?: () => void):
   Unsubscribe;
 
+/**
+ * Listens to a query using options and individual callbacks.
+ * @param query - Query whose snapshots to observe.
+ * @param options - Listener options, including metadata-change behavior.
+ * @param onNext - Callback that receives each query snapshot.
+ * @param onError - Optional callback that receives listener errors.
+ * @param onCompletion - Optional callback called when the listener completes.
+ * @returns A function that stops the listener.
+ * @example
+ * ```ts
+ * import { onSnapshot } from "fusabase/oracledb";
+ * const unsubscribe = onSnapshot(tasksQuery, { includeMetadataChanges: true }, console.log, console.error);
+ * unsubscribe();
+ * ```
+ */
 export function onSnapshot<AppModelType, DbModelType extends
  DocumentData>(query: Query<AppModelType, DbModelType>, 
  options: SnapshotListenOptions, onNext: (snapshot: 
@@ -119,15 +182,16 @@ export function onSnapshot<AppModelType, DbModelType extends DocumentData>(
     throw oracledbErrorHandler(error);
   }
 
+  if (ref instanceof Query || ref instanceof DualityViewColReference || ref instanceof CollectionReference) {
+    (ref as any).__validateSnapshotQuery();
+  }
+
   const offline = tryOfflineSnapshot(ref as any, params);
   if (offline) return offline;
   return (ref as any).onSnapshot(...params);
 }
 
 function tryOfflineSnapshot(ref: any, params: any[]): Unsubscribe | null {
-  if (ref instanceof DualityViewColReference || ref instanceof DualityViewDocReference) {
-    return null;
-  }
   const { options, observer } = parseSnapshotParams(params);
   return _listenOfflineIfEnabled(ref, options, observer as any);
 }

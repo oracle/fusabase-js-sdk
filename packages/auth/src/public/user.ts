@@ -31,16 +31,21 @@ import { ActionCodeSettings } from '../types/action-code.js';
 import { authErrorHandler,argCheck,typeStrings, AuthError, ErrorCodeMessage } from '../errors.js';
 import { PopupRedirectResolver } from '../types/auth.js';
 import { AuthProvider } from '../providers/provider.js';
-// import { MultiFactorUser } from './user.js';
+import { MultiFactorUser } from '../types/multifactor.js';
+import { MultiFactorUserImpl } from '../internal/multifactor_user.js';
 
 
 /**
- * Returns a JSON Web Token (JWT) for the user.
+ * Executes the getIdToken operation for this public SDK type.
  *
+ * @param user - The user accepted by this operation.
+ * @param forceRefresh - The forceRefresh accepted by this operation.
+ * @returns The result produced by `getIdToken`, including any requested data or handle.
  * @example
  * ```ts
- * import { getIdToken } from 'fusabase/auth';
- * const token = await getIdToken(user, true);
+ * import { getIdToken } from "fusabase/auth";
+ * const result = getIdToken(value, value);
+ * void result;
  * ```
  */
 export async function getIdToken(user: User, forceRefresh?: boolean): Promise<string> {
@@ -54,13 +59,16 @@ export async function getIdToken(user: User, forceRefresh?: boolean): Promise<st
 }
 
 /**
- * Returns a deserialized ID token with claims and metadata.
+ * Executes the getIdTokenResult operation for this public SDK type.
  *
+ * @param user - The user accepted by this operation.
+ * @param forceRefresh - The forceRefresh accepted by this operation.
+ * @returns The result produced by `getIdTokenResult`, including any requested data or handle.
  * @example
  * ```ts
- * import { getIdTokenResult } from 'fusabase/auth';
- * const tokenResult = await getIdTokenResult(user, true);
- * console.log(tokenResult.claims);
+ * import { getIdTokenResult } from "fusabase/auth";
+ * const result = getIdTokenResult(value, value);
+ * void result;
  * ```
  */
 export function getIdTokenResult(user: User, forceRefresh?: boolean): Promise<any> {
@@ -72,24 +80,37 @@ export function getIdTokenResult(user: User, forceRefresh?: boolean): Promise<an
     return user.getIdTokenResult(forceRefresh);
 }
 
-// /**
-//  * Returns the MultiFactorUser corresponding to the user.
-//  *
-//  * @example
-//  * ```ts
-//  * import { multiFactor } from 'fusabase/auth';
-//  * const mfaUser = multiFactor(user);
-//  * ```
-//  */
-// export function multiFactor(user: User): MultiFactorUser;
-
 /**
- * Reloads the user account data.
+ * Executes the multiFactor operation for this public SDK type.
  *
+ * @param user - The user accepted by this operation.
+ * @returns The result produced by `multiFactor`, including any requested data or handle.
  * @example
  * ```ts
- * import { reload } from 'fusabase/auth';
- * await reload(user);
+ * import { multiFactor } from "fusabase/auth";
+ * const result = multiFactor(value);
+ * void result;
+ * ```
+ */
+export function multiFactor(user: User): MultiFactorUser {
+  if (!(user instanceof User)) {
+        let error = new AuthError(ErrorCodeMessage.INVALID_ARGS,"Invalid user instance");
+        error.status = 400;
+        throw authErrorHandler(error);
+    }
+    return new MultiFactorUserImpl(user);
+}
+
+/**
+ * Executes the reload operation for this public SDK type.
+ *
+ * @param user - The user accepted by this operation.
+ * @returns The result produced by `reload`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { reload } from "fusabase/auth";
+ * const result = reload(value);
+ * void result;
  * ```
  */
 export function reload(user: User): Promise<void> {
@@ -102,12 +123,16 @@ export function reload(user: User): Promise<void> {
 }
 
 /**
- * Sends a verification email to the user.
+ * Executes the sendEmailVerification operation for this public SDK type.
  *
+ * @param user - The user accepted by this operation.
+ * @param actionCodeSettings - The actionCodeSettings accepted by this operation.
+ * @returns The result produced by `sendEmailVerification`, including any requested data or handle.
  * @example
  * ```ts
- * import { sendEmailVerification } from 'fusabase/auth';
- * await sendEmailVerification(user, { url: 'https://example.com/finishSignUp' });
+ * import { sendEmailVerification } from "fusabase/auth";
+ * const result = sendEmailVerification(value, value);
+ * void result;
  * ```
  */
 export function sendEmailVerification(
@@ -124,12 +149,17 @@ export function sendEmailVerification(
 
 
 /**
- * Updates the user's password.
+ * Executes the updatePassword operation for this public SDK type.
  *
+ * @param user - The user accepted by this operation.
+ * @param oldPassword - The oldPassword accepted by this operation.
+ * @param newPassword - The newPassword accepted by this operation.
+ * @returns The result produced by `updatePassword`, including any requested data or handle.
  * @example
  * ```ts
- * import { updatePassword } from 'fusabase/auth';
- * await updatePassword(user, 'NewStrongPass123!');
+ * import { updatePassword } from "fusabase/auth";
+ * const result = updatePassword(value, "correct-horse-battery-staple", "correct-horse-battery-staple");
+ * void result;
  * ```
  */
 export function updatePassword(
@@ -146,12 +176,16 @@ export function updatePassword(
 }
 
 /**
- * Updates the user's profile data (displayName and photoURL).
+ * Executes the updateProfile operation for this public SDK type.
  *
+ * @param user - The user accepted by this operation.
+ * @param profile - The profile accepted by this operation.
+ * @returns The result produced by `updateProfile`, including any requested data or handle.
  * @example
  * ```ts
- * import { updateProfile } from 'fusabase/auth';
- * await updateProfile(user, { displayName: 'John Doe', photoURL: 'https://example.com/photo.jpg' });
+ * import { updateProfile } from "fusabase/auth";
+ * const result = updateProfile(value, value);
+ * void result;
  * ```
  */
 export function updateProfile(
@@ -167,13 +201,16 @@ export function updateProfile(
 }
 
 /**
- * Links the provided credential to the current user account.
- * @async
- * @param {AuthCredential} credential - The auth credential to link with.
- * @returns {Promise<UserCredential>} A promise that resolves with the user credential.
+ * Executes the linkWithCredential operation for this public SDK type.
+ *
+ * @param user - The user accepted by this operation.
+ * @param credential - The credential to attach or convert.
+ * @returns The result produced by `linkWithCredential`, including any requested data or handle.
  * @example
  * ```ts
- * const result = await linkWithCredential(user, credential);
+ * import { linkWithCredential } from "fusabase/auth";
+ * const result = linkWithCredential(value, value);
+ * void result;
  * ```
  */
 export function linkWithCredential(user: User, credential: AuthCredential): Promise<UserCredential> {
@@ -181,13 +218,17 @@ export function linkWithCredential(user: User, credential: AuthCredential): Prom
 }
 
 /**
- * Links the user account with the given provider using a redirect.
- * @async
- * @param {Object} provider - The auth provider instance (e.g., GoogleAuthProvider).
- * @returns {Promise<void>}
+ * Executes the linkWithRedirect operation for this public SDK type.
+ *
+ * @param user - The user accepted by this operation.
+ * @param provider - The authentication provider to use.
+ * @param resolver - The resolver accepted by this operation.
+ * @returns The result produced by `linkWithRedirect`, including any requested data or handle.
  * @example
  * ```ts
- * await linkWithRedirect(user, provider);
+ * import { linkWithRedirect } from "fusabase/auth";
+ * const result = linkWithRedirect(value, value, value);
+ * void result;
  * ```
  */
 export function linkWithRedirect(user: User, provider: AuthProvider, resolver?: PopupRedirectResolver): Promise<never> {
@@ -195,13 +236,17 @@ export function linkWithRedirect(user: User, provider: AuthProvider, resolver?: 
 }
 
 /**
- * Links the user account with the given provider using a popup window.
- * @async
- * @param {Object} provider - The auth provider instance (e.g., GoogleAuthProvider).
- * @returns {Promise<UserCredential>} A promise that resolves with the user credential or null.
+ * Executes the linkWithPopup operation for this public SDK type.
+ *
+ * @param user - The user accepted by this operation.
+ * @param provider - The authentication provider to use.
+ * @param resolver - The resolver accepted by this operation.
+ * @returns The result produced by `linkWithPopup`, including any requested data or handle.
  * @example
  * ```ts
- * const result = await linkWithPopup(user, provider);
+ * import { linkWithPopup } from "fusabase/auth";
+ * const result = linkWithPopup(value, value, value);
+ * void result;
  * ```
  */
 export function linkWithPopup(user: User, provider: AuthProvider, resolver?: PopupRedirectResolver): Promise<UserCredential> {
@@ -209,13 +254,16 @@ export function linkWithPopup(user: User, provider: AuthProvider, resolver?: Pop
 }
 
 /**
- * Unlinks a provider from the user's account.
- * @async
- * @param {string} providerId - The ID of the provider to unlink.
- * @returns {Promise<User>} The updated user object.
+ * Executes the unlink operation for this public SDK type.
+ *
+ * @param user - The user accepted by this operation.
+ * @param providerId - The provider identifier.
+ * @returns The result produced by `unlink`, including any requested data or handle.
  * @example
  * ```ts
- * const updated = await unlink(user, 'example-provider');
+ * import { unlink } from "fusabase/auth";
+ * const result = unlink(value, "example-provider");
+ * void result;
  * ```
  */
 export function unlink(user: User, providerId: string): Promise<User> {

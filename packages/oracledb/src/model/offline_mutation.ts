@@ -38,6 +38,8 @@ export type OfflineTransformOperationType =
   | 'arrayUnion'
   | 'arrayRemove';
 
+export type OfflineReferenceType = 'document' | 'dualityViewDocument';
+
 export class OracledbFieldTransform {
   constructor(
     readonly field: FieldPath | string,
@@ -52,7 +54,8 @@ export abstract class OfflineWriteMutation {
   protected constructor(
     readonly key: OracledbDocumentKey,
     readonly precondition: OracledbWritePrecondition,
-    readonly fieldTransforms: OracledbFieldTransform[] = []
+    readonly fieldTransforms: OracledbFieldTransform[] = [],
+    readonly referenceType: OfflineReferenceType = 'document'
   ) {}
 }
 
@@ -63,9 +66,10 @@ export class OfflineSetWrite extends OfflineWriteMutation {
     key: OracledbDocumentKey,
     readonly data: DocumentData,
     precondition: OracledbWritePrecondition,
-    fieldTransforms: OracledbFieldTransform[] = []
+    fieldTransforms: OracledbFieldTransform[] = [],
+    referenceType: OfflineReferenceType = 'document'
   ) {
-    super(key, precondition, fieldTransforms);
+    super(key, precondition, fieldTransforms, referenceType);
   }
 }
 
@@ -77,9 +81,10 @@ export class OfflinePatchWrite extends OfflineWriteMutation {
     readonly data: DocumentData,
     readonly fieldMask: Array<FieldPath | string>,
     precondition: OracledbWritePrecondition,
-    fieldTransforms: OracledbFieldTransform[] = []
+    fieldTransforms: OracledbFieldTransform[] = [],
+    referenceType: OfflineReferenceType = 'document'
   ) {
-    super(key, precondition, fieldTransforms);
+    super(key, precondition, fieldTransforms, referenceType);
   }
 }
 
@@ -89,9 +94,10 @@ export class OfflineDeleteWrite extends OfflineWriteMutation {
   constructor(
     key: OracledbDocumentKey,
     precondition: OracledbWritePrecondition,
-    fieldTransforms: OracledbFieldTransform[] = []
+    fieldTransforms: OracledbFieldTransform[] = [],
+    referenceType: OfflineReferenceType = 'document'
   ) {
-    super(key, precondition, fieldTransforms);
+    super(key, precondition, fieldTransforms, referenceType);
   }
 }
 

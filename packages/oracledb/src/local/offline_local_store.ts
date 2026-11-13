@@ -48,6 +48,7 @@ import {
   OfflineTargetDocument,
 } from './types.js';
 import { overlayKey } from './offline_persistence.js';
+import { safeDeleteOwn, safeGetOwn, safeSetOwn } from '../util/utils_helper.js';
 
 export class OfflineLocalStore {
   private readonly mutationQueue: OfflineMutationQueue;
@@ -74,6 +75,11 @@ export class OfflineLocalStore {
     mutations: OfflineWriteMutation[],
     source: OfflineWriteBatchSource = 'individual'
   ): Promise<OfflineLocalWriteResult> {
+    // IndexedDB persistence reserves this number in a separate read/write
+    // transaction, so independently running tabs cannot allocate the same ID.
+    const batchId = this.persistence.allocateBatchId
+      ? await this.persistence.allocateBatchId()
+      : this.persistence.nextBatchId++;
     return this.runPersistenceTransaction(async () => {
       const localDocuments = await Promise.all(
         mutations.map(mutation => this.getLocalDocument(mutation.key))
@@ -87,7 +93,7 @@ export class OfflineLocalStore {
         mutations.map(mutation => this.getRemoteDocument(mutation.key))
       );
       const batch = new OfflineWriteBatch(
-        this.persistence.nextBatchId++,
+        batchId,
         Date.now(),
         mutations,
         baseDocuments,
@@ -615,7 +621,7 @@ export class OfflineLocalStore {
     for (const field of mask) {
       const path = String(field);
       const existing = this.getFieldValue(result, path);
-      const materialized = this.materializeValue(mutation.data[path] ?? this.getFieldValue(mutation.data, path), existing);
+      const materialized = this.materializeValue(safeGetOwn(mutation.data, path) ?? this.getFieldValue(mutation.data, path), existing);
       if (materialized.delete) {
         this.deleteFieldValue(result, path);
       } else {
@@ -641,9 +647,9 @@ export class OfflineLocalStore {
         : {};
       const result: Record<string, unknown> = {};
       for (const [key, childValue] of Object.entries(value as Record<string, unknown>)) {
-        const materialized = this.materializeValue(childValue, baseObject[key]);
+        const materialized = this.materializeValue(childValue, safeGetOwn(baseObject, key));
         if (!materialized.delete) {
-          result[key] = materialized.value;
+          safeSetOwn(result, key, materialized.value);
         }
       }
       return { delete: false, value: result };
@@ -686,7 +692,7 @@ export class OfflineLocalStore {
   }
 
   private getFieldValue(data: Record<string, unknown>, path: string): unknown {
-    return this.pathParts(path).reduce<any>((value, key) => value == null ? undefined : value[key], data);
+    return this.pathParts(path).reduce<any>((value, key) => safeGetOwn(value, key), data);
   }
 
   private setFieldValue(data: Record<string, unknown>, path: string, value: unknown): void {
@@ -694,24 +700,24 @@ export class OfflineLocalStore {
     let target: Record<string, unknown> = data;
     for (let index = 0; index < parts.length - 1; index++) {
       const key = parts[index];
-      const child = target[key];
+      const child = safeGetOwn(target, key);
       if (!child || typeof child !== 'object' || Array.isArray(child)) {
-        target[key] = {};
+        safeSetOwn(target, key, {});
       }
-      target = target[key] as Record<string, unknown>;
+      target = safeGetOwn(target, key) as Record<string, unknown>;
     }
-    target[parts[parts.length - 1]] = value;
+    safeSetOwn(target, parts[parts.length - 1], value);
   }
 
   private deleteFieldValue(data: Record<string, unknown>, path: string): void {
     const parts = this.pathParts(path);
     let target: Record<string, unknown> | undefined = data;
     for (let index = 0; index < parts.length - 1; index++) {
-      const child = target?.[parts[index]];
+      const child = safeGetOwn(target, parts[index]);
       if (!child || typeof child !== 'object' || Array.isArray(child)) return;
       target = child as Record<string, unknown>;
     }
-    delete target?.[parts[parts.length - 1]];
+    safeDeleteOwn(target, parts[parts.length - 1]);
   }
 
   private applyTransformResults(
@@ -741,7 +747,7 @@ export class OfflineLocalStore {
       const fields: string[] = [];
       for (const field of mask) {
         const path = String(field);
-        const value = mutation.data[path] ?? this.getFieldValue(mutation.data, path);
+        const value = safeGetOwn(mutation.data, path) ?? this.getFieldValue(mutation.data, path);
         if (this.isBackendTransform(value)) {
           fields.push(path);
         } else if (value && typeof value === 'object' && !Array.isArray(value)) {

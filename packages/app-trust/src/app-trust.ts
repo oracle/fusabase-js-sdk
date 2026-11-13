@@ -134,7 +134,9 @@ function emit(state: InternalState, token: AppTrustTokenResult): void {
 function appTrustStorageKey(app: App): string {
   const projectId = String(app.options.projectID ?? '').trim();
   const appId = String(app.options.appID ?? '').trim();
-  return `${projectId}:${appId}`;
+  // Never read or migrate the legacy projectId:appId key: it was shared by
+  // every named App with the same backend identifiers, so it has no safe owner.
+  return JSON.stringify(['fusabase-app-trust-v2', app.name, projectId, appId]);
 }
 
 function clearLegacyAppTokenMirrors(app: App): void {
@@ -167,15 +169,17 @@ async function loadPersistedTokenIntoState(state: InternalState): Promise<void> 
 }
 
 /**
- * Initializes the App Trust service for an application.
+ * Initializes the application-attestation service for an application.
  *
- * @param app - The application instance to protect.
+ * @param app - Application instance that owns the attestation service.
  * @param options - Configuration containing the browser attestation provider.
- * @returns The initialized App Trust instance.
+ * @returns The initialized attestation service.
+ * @throws {FusabaseAppTrustError} If `app` is missing, the provider is unsupported, or App Trust was already initialized for the app.
+ *
  * @example
  * ```ts
- * const trust = initializeAppTrust(app, {
- *   provider: new ReCaptchaV3Provider('site-key')
+ * const appTrust = initializeAppTrust(app, {
+ *   provider: new ReCaptchaV3Provider("site-key"),
  * });
  * ```
  */
@@ -211,26 +215,24 @@ export function initializeAppTrust(app: App | undefined, options: AppTrustOption
 }
 
 /**
- * Gets an attestation token, using a valid cached token when possible.
+ * Gets a cached or newly minted attestation token.
  *
- * @param appTrustInstance - The initialized App Trust instance.
- * @param forceRefresh - Whether to request a new token even when a cached token is valid.
- * @returns A promise that resolves with the token and its expiry time.
+ * @param appTrustInstance - Initialized attestation service.
+ * @param forceRefresh - Whether to bypass a valid cached token.
+ * @returns A promise that resolves to the token and its expiration time.
+ * @throws {FusabaseAppTrustError} If the instance is invalid or the attestation service rejects the token exchange.
+ *
  * @example
  * ```ts
- * const { token } = await getToken(trust);
+ * const { token } = await getToken(appTrust);
+ * ```
+ *
+ * @example
+ * ```ts
+ * const { token } = await getToken(appTrust, true);
  * ```
  */
 export async function getToken(appTrustInstance: AppTrust, forceRefresh: boolean = false): Promise<AppTrustTokenResult> {
-  /**
-   * Returns an FUSABASE App Trust token.
-   *
-   * - If `forceRefresh` is `false`, a cached token will be returned when still
-   *   valid.
-   * - If `forceRefresh` is `true`, the SDK will mint a new provider attestation
-   *   token and exchange it with the FUSABASE App Trust servlet.
-   *
-   */
   const impl = appTrustInstance as AppTrustImpl;
   const state = impl?._state;
   if (!state) {
@@ -320,18 +322,65 @@ export async function getToken(appTrustInstance: AppTrust, forceRefresh: boolean
 }
 
 /**
- * Subscribes to token changes for an App Trust instance.
+ * Registers a listener that receives each attestation-token update.
  *
- * @param appTrustInstance - The initialized App Trust instance.
- * @param observer - A callback or observer object that receives token updates and errors.
- * @returns A function that removes the subscription.
+ * @param appTrustInstance - Initialized attestation service.
+ * @param observer - Observer with optional `next`, `error`, and `complete` callbacks.
+ * @returns A function that removes the listener.
+ *
  * @example
  * ```ts
- * const unsubscribe = onTokenChanged(trust, token => console.log(token.token));
- * // Later: unsubscribe();
+ * const unsubscribe = onTokenChanged(appTrust, {
+ *   next: ({ token }) => console.log(token),
+ * });
+ * unsubscribe();
+ * ```
+ *
+ * @example
+ * ```ts
+ * import { onTokenChanged } from "fusabase/app-trust";
+ *
+ * const unsubscribe = onTokenChanged(
+ *   appTrust,
+ *   ({ token }) => console.log(token),
+ *   (error) => console.error(error),
+ *   () => console.log("listener completed")
+ * );
+ * unsubscribe();
+ * ```
+ */
+/**
+ * Observes tokens with an observer object.
+ * @param appTrustInstance - Initialized attestation service to observe.
+ * @param observer - Object whose optional callbacks receive token, error, and completion notifications.
+ * @returns A function that removes the listener.
+ * @example
+ * ```ts
+ * import { onTokenChanged } from "fusabase/app-trust";
+ * const unsubscribe = onTokenChanged(appTrust, { next: ({ token }) => console.log(token) });
+ * unsubscribe();
  * ```
  */
 export function onTokenChanged(appTrustInstance: AppTrust, observer: Partial<Observer>): Unsubscribe;
+/**
+ * Observes tokens with individual callbacks.
+ * @param appTrustInstance - Initialized attestation service to observe.
+ * @param onNext - Callback that receives each token result.
+ * @param onError - Optional callback that receives listener callback errors.
+ * @param onCompletion - Optional completion callback.
+ * @returns A function that removes the listener.
+ * @example
+ * ```ts
+ * import { onTokenChanged } from "fusabase/app-trust";
+ * const unsubscribe = onTokenChanged(
+ *   appTrust,
+ *   ({ token }) => console.log(token),
+ *   error => console.error(error),
+ *   () => console.log("listener completed")
+ * );
+ * unsubscribe();
+ * ```
+ */
 export function onTokenChanged(
   appTrustInstance: AppTrust,
   onNext: (tokenResult: AppTrustTokenResult) => void,
@@ -344,15 +393,6 @@ export function onTokenChanged(
   b?: (error: Error) => void,
   c?: () => void
 ): Unsubscribe {
-  /**
-   * Registers a listener for App Trust token changes.
-   *
-   * The callback will be called whenever a new token is minted and cached.
-   * If a cached token already exists, the listener is invoked asynchronously
-   * with the current token.
-   *
-   * @returns An unsubscribe function.
-   */
   const impl = appTrustInstance as AppTrustImpl;
   const state = impl?._state;
   if (!state) {

@@ -23,7 +23,7 @@
 // limitations under the License.
 //
 //-----------------------------------------------------------------------------
-// 
+//
 
 import { DocumentReference, DualityViewDocReference } from "../document/reference.js";
 import { createPayloadForUpdateVersion2New, extractEmbeddingsMapForCreate, parseTimestamp, serializeVersion2, setWholeData, updateNestedData } from "../util/utils_helper.js";
@@ -37,7 +37,12 @@ import { AggregateQuery } from './aggregate.js';
 import { deepEqual, extractCallbacksForSnapshot } from '../util/utils_helper.js';
 import { nullCheck } from '../util/utils.js';
 import { SnapshotMetadata } from '../listener/snapshot.js';
-import { QuerySnapshot, markQuerySnapshotAsFailedRequest } from './snapshot.js';
+import {
+  getFailedQuerySnapshotError,
+  isQuerySnapshotFromFailedRequest,
+  markQuerySnapshotAsFailedRequest,
+  QuerySnapshot,
+} from './snapshot.js';
 import { IdTokenResult } from '../../../auth/src/types/idtoken.js';
 import { VectorSearch } from '../types/vector.js';
 import { normalizeLongPollingOptions } from '../internal/settings.js';
@@ -52,12 +57,21 @@ function getLongPollingIntervalMs(db: any): number {
   }
 }
 
+/**
+ * Represents a composable read query.
+ *
+ * @example
+ * ```ts
+ * const activeTasks = query(tasks, where("done", "==", false));
+ * ```
+ */
 export class Query<AppModelType = DocumentData, DbModelType extends DocumentData = DocumentData> {
   /** @internal */ _conditions: any[] = [];
   /** @internal */ _explicitOrder: any[] = [];
   /** @internal */ _joins: any[] = [];
   /** @internal */ _aggregate: any[] = [];
   /** @internal */ _column: any[] = [];
+  /** @internal */ _limitToLast = false;
   /** @internal */ _serverTimestamp:any[] = [];
   /** @internal */ _limit = 0;
   /** @internal */ __pk = "OID";
@@ -70,11 +84,25 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
    * @internal
    */
   public converter: OracledbDataConverter<any, any> | null;
+/** Describes the public `type` value. */
   public type: QueryType;
+/** Describes the public `oracledb` value. */
   public oracledb: any;
   /** @internal */ _ops: any[] = [];
   /** @internal */ _vectorSearch?: VectorSearch;
 
+/**
+ * Constructs a Query instance with the supplied configuration.
+ *
+ * @param db - The database instance to use.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Query } from "fusabase/oracledb";
+ * const result = new Query(value);
+ * void result;
+ * ```
+ */
   constructor(db: any) {
     this.type = "query";
     this.oracledb = db;
@@ -88,6 +116,21 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
    */
   addAggregate(obj:any) {
     this._aggregate.push(obj);
+  }
+
+  /** @internal Validates the subset of query constraints supported by realtime listeners. */
+  __validateSnapshotQuery(): void {
+    if (
+      this._joins.length > 0 ||
+      this._aggregate.length > 0 ||
+      this._vectorSearch != null
+    ) {
+      const error = new Error(
+        "onSnapshot does not support joins, aggregates, or vector search queries."
+      );
+      (error as any).status = 400;
+      throw oracledbErrorHandler(error);
+    }
   }
 
   // Create a new query and copy current state
@@ -105,6 +148,7 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
   newQuery._aggregate = [...this._aggregate];
   newQuery._brid = [...this._brid];
   newQuery._column = [...this._column];
+  newQuery._limitToLast = this._limitToLast;
   newQuery._ops = [...this._ops];
   newQuery._col_group = this._col_group;
   newQuery._rt = this._rt;
@@ -116,6 +160,18 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
 
 
   // Converter logic
+/**
+ * Executes the isEqual operation for this public SDK type.
+ *
+ * @param converter - The converter accepted by this operation.
+ * @returns The result produced by `isEqual`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { Query } from "fusabase/oracledb";
+ * const result = client.isEqual(value);
+ * void result;
+ * ```
+ */
   withConverter<NewAppModelType extends DocumentData, NewDbModelType extends DocumentData = DocumentData>(
     converter: OracledbDataConverter<NewAppModelType, NewDbModelType> | null
   ): Query<NewAppModelType, NewDbModelType> {
@@ -216,6 +272,14 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
           (error as any).status = 400;
           throw oracledbErrorHandler(error);
         }
+    }
+    if (
+      (opStr === "not-in" && this._ops.includes("!=")) ||
+      (opStr === "!=" && this._ops.includes("not-in"))
+    ) {
+      let error = new Error("not-in can't be used with !=.");
+      (error as any).status = 400;
+      throw oracledbErrorHandler(error);
     }
     this._ops.push(opStr);
     if (opStr !== "is-null") nullCheck(fieldValue, "Invalid value provided.");
@@ -381,6 +445,7 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
         this._explicitOrder[i].direction === "asc" ? "desc" : "asc";
     }
     newQuery._limit = limitValue;
+    newQuery._limitToLast = true;
     return newQuery;
   }
 
@@ -538,7 +603,7 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
         this,
         new SnapshotMetadata(false, false)
       );
-      return markQuerySnapshotAsFailedRequest(emptySnapshot);
+      return markQuerySnapshotAsFailedRequest(emptySnapshot, err);
     }
 
     if (promJson) {
@@ -565,6 +630,10 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
         const meta = new SnapshotMetadata(false, false);
         docSnaps.push(new QueryDocumentSnapshot(doc, ref, meta));
       });
+
+      if (this._limitToLast) {
+        docSnaps.reverse();
+      }
 
       return new QuerySnapshot(docSnaps, this, new SnapshotMetadata(false, false));
     }
@@ -598,6 +667,8 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
     //   throw oracledbErrorHandler(new OracledbError("Operation is not supported in namedQuery.", 400));
     // }
 
+    this.__validateSnapshotQuery();
+
     this._rt = 1;
     this.updateListenersCount(1);
 
@@ -606,6 +677,15 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
       if (callback.next) {
         try {
           callback.next(querySnap);
+        } catch (ue) {
+          Utils.baasLogger(this.oracledb.app.logLevel, "Error in snapshot callback", ue);
+        }
+      }
+    };
+    const handleFetchError = (error: Error) => {
+      if (callback.error) {
+        try {
+          callback.error(error);
         } catch (ue) {
           Utils.baasLogger(this.oracledb.app.logLevel, "Error in snapshot callback", ue);
         }
@@ -620,17 +700,22 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
 
     const payload = {
       path: this._path,
+      conditions: this._conditions
+    };
+    const subscriptionIdentity = {
+      type: this.type,
+      path: this._path,
       conditions: this._conditions,
       explicitOrder: this._explicitOrder,
-      joins: this._joins,
-      access_token: access_token ? access_token.claims.sub : null
+      limit: this._limit,
+      column: this._column
     };
-
-    
-
-    const mappedQueryId = Math.abs(snapHashcode(JSON.stringify(payload)));
-    delete (payload as any)["access_token"];
-    const queryId = Math.abs(snapHashcode(JSON.stringify(payload)));
+    const snapshotKey = JSON.stringify({
+      ...subscriptionIdentity,
+      access_token: access_token ? access_token.claims.sub : null
+    });
+    let realtimeGeneration = this.oracledb.__getRealtimeGeneration();
+    const queryId = Math.abs(snapHashcode(JSON.stringify(subscriptionIdentity)));
 
     let unsubscribe: () => void;
 
@@ -639,14 +724,18 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
       !this.oracledb._settings.experimentalAutoDetectLongPolling &&
       !this.oracledb._settings.experimentalForceLongPolling
     ) {
-      this.oracledb.__createSocket(access_token ? access_token.token : null);
-
+      this.oracledb.__registerSnapshotQuery(queryId, snapshotKey);
       const queryObject = {
         queryId,
         status: 1,
-        payload,
-        TABLE_NAME: ""
+        payload
       };
+      this.oracledb.__registerRealtimeSubscription(queryId, queryObject);
+      this.oracledb.__createSocket(access_token ? access_token.token : null)
+        .catch((error: unknown) => {
+          Utils.baasLogger(this.oracledb.app.logLevel, "Unable to establish realtime socket", error);
+        });
+      realtimeGeneration = this.oracledb.__getRealtimeGeneration();
 
       if (!Utils.memberExists(this.oracledb.__snaps, queryId)) {
         this.oracledb.__snaps[queryId] = [];
@@ -656,10 +745,15 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
 
       this.oracledb.__snaps[queryId].push(_queryId);
       this.oracledb.__callbacks[_queryId] = callback;
-      this.oracledb.__queryIdMap[queryId] = mappedQueryId;
-
       this.get()
-        .then((querySnap) => {
+        .then(async (querySnap) => {
+          if (realtimeGeneration !== this.oracledb.__getRealtimeGeneration()) {
+            return;
+          }
+          if (isQuerySnapshotFromFailedRequest(querySnap)) {
+            handleFetchError(getFailedQuerySnapshotError(querySnap));
+            return;
+          }
           querySnap.docChanges = () =>
             querySnap.docs.map((doc, i) => ({
               doc,
@@ -668,23 +762,17 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
               newIndex: i
             }));
 
-          handleSnapshot(querySnap as any);
-
-          this.oracledb.__setIndexDB({
-            queryId: mappedQueryId,
+          await this.oracledb.__setIndexDB({
+            queryId: snapshotKey,
             snap: querySnap,
             type: "collection",
             path: this._path.join("/")
-          }).catch((e: any) => Utils.baasLogger(this.oracledb.app.logLevel, e));
+          });
+          handleSnapshot(querySnap as any);
+          this.oracledb.__markInitialSnapshotReady(queryId);
         })
         .catch((e: any) => {
-          if (callback.error) {
-            try {
-              callback.error(e);
-            } catch (ue) {
-              Utils.baasLogger(this.oracledb.app.logLevel, "Error in snapshot callback", ue);
-            }
-          }
+          handleFetchError(e);
         });
 
       unsubscribe = () => {
@@ -701,6 +789,7 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
           if (activeListeners.length === 0) {
             delete this.oracledb.__queryIdMap[queryId];
             delete this.oracledb.__snaps[queryId];
+            this.oracledb.__unregisterRealtimeSubscription(queryId);
             this.oracledb.__sendMessage({ queryId, status: 0, payload });
           }
         }
@@ -713,8 +802,12 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
       };
     } else {
       let oldQuerySnap:any;
-      //for the first time 
+      //for the first time
       this.get().then((querySnap:any) => {
+        if (isQuerySnapshotFromFailedRequest(querySnap)) {
+          handleFetchError(getFailedQuerySnapshotError(querySnap));
+          return;
+        }
         //docChanges
         querySnap.docChanges = (options:any) => {
           let docsChanged:any = [];
@@ -752,6 +845,10 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
         // Function to be executed
         function executeTask() {
           colRef.get().then((querySnap:any) => {
+            if (isQuerySnapshotFromFailedRequest(querySnap)) {
+              handleFetchError(getFailedQuerySnapshotError(querySnap));
+              return;
+            }
             //get last snapshot
               if (oldQuerySnap == null) {
                 throw new Error("Could not locate last snapshot in indexed db");
@@ -800,7 +897,7 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
                   newDocs.push(querySnap._docs[i]);
                 }
               }
-              
+
               for (let i = 0; i < oldQuerySnap._docs.length; i++) {
                 if (!Object.prototype.hasOwnProperty.call(newVersionMap,
                   oldQuerySnap._docs[i].id)) {
@@ -828,6 +925,7 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
           }).catch(e => {
             db.eventManager?.dispatchEvent?.(new Event("long polling error"));
             Utils.baasLogger(db.app.logLevel, e);
+            handleFetchError(e);
           })
         }
 
@@ -893,19 +991,44 @@ export class Query<AppModelType = DocumentData, DbModelType extends DocumentData
  * ```
  */
 
+/**
+ * Represents a collection of documents.
+ *
+ * @example
+ * ```ts
+ * const tasks = collection(database, "tasks");
+ * ```
+ */
 export class CollectionReference<
   AppModelType = DocumentData,
   DbModelType extends DocumentData = DocumentData
 > extends Query<AppModelType, DbModelType> {
+/** Describes the public `id` value. */
   public readonly id: string;
+/** Describes the public `parent` value. */
   public readonly parent: DocumentReference<DocumentData, DocumentData> | null;
+/** Describes the public `type` value. */
   public readonly type: QueryType = 'collection';
 
+/**
+ * Constructs a CollectionReference instance with the supplied configuration.
+ *
+ * @param db - The database instance to use.
+ * @param path - The relative resource path.
+ * @param parent - The parent accepted by this operation.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { CollectionReference } from "fusabase/oracledb";
+ * const result = new CollectionReference(value, "example", value);
+ * void result;
+ * ```
+ */
   constructor(
     db: any,
     path: string,
     parent: DocumentReference<DocumentData, DocumentData> | null = null
-  ) 
+  )
   {
     super(db);
     if (path == null) {
@@ -957,7 +1080,7 @@ export class CollectionReference<
   //     document = this.converter.toOracledb(document);
   //   }
   //   argCheck(document, "Invalid data", true, [typeStrings.OBJECT]);
-  //   let createdDocId = 'newly-created-id'; 
+  //   let createdDocId = 'newly-created-id';
   //   const newDoc = new DocumentReference<AppModelType, DbModelType>(this.oracledb, createdDocId, this);
   //   newDoc.converter = this.converter;
   //   return newDoc;
@@ -1037,16 +1160,39 @@ export class CollectionReference<
   }
 }
 
+/**
+ * Represents a duality-view collection.
+ *
+ * @example
+ * ```ts
+ * const orders = dualityViewCollection(database, "orders");
+ * ```
+ */
 export class DualityViewColReference<
   AppModelType = DocumentData,
   DbModelType extends DocumentData = DocumentData
 > extends Query<AppModelType, DbModelType> {
+/** Describes the public `id` value. */
   id: string;
+/** Describes the public `parent` value. */
   parent: null;
   /** @internal */  _path: string[];
   /** @internal */ _serverTimestamp:any[] = [];
 
   // Ensure _queryHelper exists; Query stub supplies one
+/**
+ * Constructs a DualityViewColReference instance with the supplied configuration.
+ *
+ * @param db - The database instance to use.
+ * @param name - Optional name used to identify the resource.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { DualityViewColReference } from "fusabase/oracledb";
+ * const result = new DualityViewColReference(value, "example");
+ * void result;
+ * ```
+ */
   constructor(db: any, name: string) {
     super(db);
     this.type = 'dualityviewcollection';
@@ -1140,7 +1286,7 @@ export class DualityViewColReference<
     } catch (err) {
       Utils.baasTrace(this.oracledb.app.logLevel);
       const q_meta = new SnapshotMetadata(false, false);
-      return new QuerySnapshot([], this, q_meta);
+      return markQuerySnapshotAsFailedRequest(new QuerySnapshot([], this, q_meta), err);
     }
 
     if (promJson) {

@@ -32,30 +32,26 @@ import { Oracledb } from "../internal/core.js";
 import { type OracledbSettings } from "../internal/settings.js";
 
 /**
- * Initializes a database service instance for an application.
+ * Initializes the document-data service for an application.
  *
- * @param app - The initialized application instance.
- * @param settings - Optional settings applied before the instance is used.
- * @param databaseId - Optional identifier for a named database.
- * @returns The initialized database service instance.
+ * @param app - Application that owns the service.
+ * @param settings - Optional service settings applied during initialization.
+ * @returns The initialized document-data service.
  * @example
  * ```ts
- * const db = initializeOracledb(app);
+ * const database = initializeOracledb(app);
  * ```
  */
 export function initializeOracledb(
   app: App,
-  settings?: OracledbSettings,
-  databaseId?: string
+  settings?: OracledbSettings
 ): Oracledb {
   if (!(app instanceof App)) {
     const error = new Error('Invalid app instance') as Error & { status?: number };
     error.status = 400;
     throw error;
   }
-  const oracledb = _getProvider<Oracledb>(app, 'oracledb').getImmediate({
-    identifier: databaseId
-  }) as Oracledb;
+  const oracledb = _getProvider<Oracledb>(app, 'oracledb').getImmediate() as Oracledb;
   if (settings) {
     oracledb?.settings(settings);
   }
@@ -63,26 +59,22 @@ export function initializeOracledb(
 }
 
 /**
- * Gets a database service instance for an application.
+ * Gets the document-data service for an application.
  *
- * @param app - The application instance; the primary instance is used when omitted.
- * @param databaseId - Optional identifier for a named database.
- * @returns The database service instance.
+ * @param app - Optional application; the default application is used when omitted.
+ * @returns The document-data service.
  * @example
  * ```ts
- * const db = getOracledb(app, 'primary');
+ * const database = getOracledb(app);
  * ```
  */
-export function getOracledb(app: App, databaseId: string): Oracledb;
 export function getOracledb(app?: App): Oracledb;
-export function getOracledb(app?: App,  databaseId?: string): Oracledb {
+export function getOracledb(app?: App): Oracledb {
   app = app == null ? fusabase.app() : app;
   if (!(app instanceof App)) {
     const error = new Error('Invalid app instance') as Error & { status?: number };
     error.status = 400;
     throw error; // Use oracledbErrorHandler or similar if required
   }
-  return _getProvider<Oracledb>(app, 'oracledb').getImmediate({
-    identifier: databaseId
-  }) as Oracledb;
+  return _getProvider<Oracledb>(app, 'oracledb').getImmediate() as Oracledb;
 }

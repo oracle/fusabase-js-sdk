@@ -29,10 +29,10 @@ import { FieldValue } from "../field/value.js";
 /**
  * Returns a sentinel for setting a field to the server-generated timestamp.
  *
- * @returns A timestamp sentinel for use in a write.
+ * @returns A timestamp sentinel value.
  * @example
  * ```ts
- * await updateDoc(profile, { updatedAt: serverTimestamp() });
+ * await setDoc(ref, { updatedAt: serverTimestamp() });
  * ```
  */
 export function serverTimestamp(): FieldValue {
@@ -42,10 +42,10 @@ export function serverTimestamp(): FieldValue {
 /**
  * Returns a sentinel for deleting a field in Oracledb.
  *
- * @returns A deletion sentinel for use in a write.
+ * @returns A field-deletion sentinel value.
  * @example
  * ```ts
- * await updateDoc(profile, { temporaryValue: deleteField() });
+ * await updateDoc(ref, { obsoleteField: deleteField() });
  * ```
  */
 export function deleteField(): FieldValue {
@@ -54,12 +54,11 @@ export function deleteField(): FieldValue {
 
 /**
  * Returns a sentinel for adding elements to an array field.
- *
- * @param elements - Elements to add.
- * @returns An array-union sentinel for use in a write.
+ * @param elements - Elements to add
+ * @returns An array-union sentinel value.
  * @example
  * ```ts
- * await updateDoc(profile, { roles: arrayUnion('editor') });
+ * await updateDoc(ref, { tags: arrayUnion("new") });
  * ```
  */
 export function arrayUnion<T>(...elements: T[]): FieldValue {
@@ -68,14 +67,12 @@ export function arrayUnion<T>(...elements: T[]): FieldValue {
 
 /**
  * Returns a sentinel for removing elements from an array field.
- *
- * @param elements - Elements to remove.
- * @returns An array-removal sentinel for use in a write.
+ * @param elements - Elements to remove
+ * @returns An array-removal sentinel value.
  * @example
  * ```ts
- * await updateDoc(profile, { roles: arrayRemove('viewer') });
+ * await updateDoc(ref, { tags: arrayRemove("old") });
  * ```
- * @param elements - Elements to remove
  */
 export function arrayRemove<T>(...elements: T[]): FieldValue {
   return FieldValue.arrayRemove(...elements);
@@ -83,14 +80,12 @@ export function arrayRemove<T>(...elements: T[]): FieldValue {
 
 /**
  * Returns a sentinel for incrementing a numeric field.
- *
- * @param n - The amount by which to change the numeric value.
- * @returns An increment sentinel for use in a write.
+ * @param n - The amount to increment by
+ * @returns A numeric-increment sentinel value.
  * @example
  * ```ts
- * await updateDoc(counter, { value: increment(1) });
+ * await updateDoc(ref, { views: increment(1) });
  * ```
- * @param n - The amount to increment by
  */
 export function increment(n: number): FieldValue {
   return FieldValue.increment(n);

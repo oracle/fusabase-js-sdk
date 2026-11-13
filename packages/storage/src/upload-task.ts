@@ -23,7 +23,7 @@
 // limitations under the License.
 //
 //-----------------------------------------------------------------------------
-// 
+//
 
 import { StorageError, storageErrorHandler, StorageErrorCode, getStorageErrorMessage } from "./errors.js";
 import { StorageReference } from "./internal/reference.js";
@@ -35,9 +35,22 @@ import type { UploadMetadata, FullMetadata } from "./types.js";
  * @param data - The data to upload (Blob, ArrayBuffer, or Uint8Array).
  * @param metadata - Optional metadata for the upload.
  * @returns A promise that resolves with the upload result containing ref and metadata.
+ * @throws {StorageError} If `ref` is invalid or the upload is rejected.
  * @example
  * ```ts
- * const result = await uploadBytes(avatar, file, { contentType: file.type });
+ * const result = await uploadBytes(fileRef, file);
+ * ```
+ *
+ * @example ArrayBuffer upload
+ * ```ts
+ * const result = await uploadBytes(fileRef, await file.arrayBuffer());
+ * ```
+ *
+ * @example Uint8Array upload with metadata
+ * ```ts
+ * const result = await uploadBytes(fileRef, new TextEncoder().encode("hello"), {
+ *   contentType: "text/plain"
+ * });
  * ```
  */
 export async function uploadBytes(
@@ -61,10 +74,22 @@ export async function uploadBytes(
  * @param data - The data to upload (Blob, ArrayBuffer, or Uint8Array).
  * @param metadata - Optional metadata for the upload.
  * @returns A promise that resolves with the UploadTask.
+ * @throws {StorageError} If `ref` is invalid or task creation fails.
  * @example
  * ```ts
- * const task = uploadBytesResumable(avatar, file);
- * task.on('state_changed', snapshot => console.log(snapshot.bytesTransferred));
+ * const task = uploadBytesResumable(fileRef, file);
+ * ```
+ *
+ * @example Resumable ArrayBuffer upload
+ * ```ts
+ * const task = uploadBytesResumable(fileRef, await file.arrayBuffer());
+ * ```
+ *
+ * @example Resumable Uint8Array upload
+ * ```ts
+ * const task = uploadBytesResumable(fileRef, new TextEncoder().encode("hello"), {
+ *   contentType: "text/plain"
+ * });
  * ```
  */
 export function uploadBytesResumable(

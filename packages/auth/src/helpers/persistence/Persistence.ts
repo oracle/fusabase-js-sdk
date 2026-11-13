@@ -1,4 +1,4 @@
-// Copyright (c) 2015, 2026, Oracle and/or its affiliates.
+// Copyright (c) 2015, 2025, Oracle and/or its affiliates.
 
 //-----------------------------------------------------------------------------
 //
@@ -25,15 +25,5 @@
 //-----------------------------------------------------------------------------
 // 
 
-import PersistenceType from "./PersistenceType.js";
-
-/**
- * @internal
- */
-const AuthPersistence = {
-    LOCAL: { type: PersistenceType.LOCAL },
-    SESSION: { type: PersistenceType.SESSION },
-    NONE: { type: PersistenceType.NONE }
-}
-
-export default AuthPersistence;
+export { default } from "../../../../auth-core/src/helpers/persistence/Persistence.js";
+export * from "../../../../auth-core/src/helpers/persistence/Persistence.js";

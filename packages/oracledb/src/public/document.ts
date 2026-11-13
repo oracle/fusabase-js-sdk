@@ -32,15 +32,25 @@ import { oracledbErrorHandler } from "../util/utils.js";
 import { FieldPath } from "../field/path.js";
 import { Oracledb } from "../internal/core.js";
 /**
- * Returns a DocumentReference from a CollectionReference and path (and optional path segments).
+ * Creates a document reference from a service, collection, or document path.
  *
- * @param reference - A database, collection, or document reference.
- * @param path - A document path or identifier; generated when omitted.
- * @param pathSegments - Additional path segments.
- * @returns A document reference.
+ * @param reference - Document-data service, collection reference, or document reference.
+ * @param path - Document path or identifier.
+ * @param pathSegments - Additional document-path segments.
+ * @returns The document reference.
  * @example
  * ```ts
- * const profile = doc(db, 'profiles', 'ada');
+ * const task = doc(database, "tasks/task-1");
+ * ```
+ *
+ * @example Create a child document from a collection reference.
+ * ```ts
+ * const task = doc(tasks, "task-1");
+ * ```
+ *
+ * @example Create a nested document from a document reference.
+ * ```ts
+ * const comment = doc(task, "comments", "comment-1");
  * ```
  */
 export function doc<
@@ -84,12 +94,12 @@ export function doc<
 }
 
 /**
- * Returns a FieldPath that refers to the ID of a document.
+ * Creates a field path that addresses a document identifier.
  *
- * @returns A field path for a document identifier.
+ * @returns The document-identifier field path.
  * @example
  * ```ts
- * const selected = query(users, where(documentId(), '==', 'ada'));
+ * const byId = where(documentId(), "==", "task-1");
  * ```
  */
 export function documentId(): FieldPath {
@@ -105,6 +115,11 @@ export function documentId(): FieldPath {
  * @example
  * ```ts
  * const same = refEqual(firstRef, secondRef);
+ * ```
+ *
+ * @example Compare collection references.
+ * ```ts
+ * const sameCollection = refEqual(tasks, archivedTasks);
  * ```
  */
 export function refEqual<

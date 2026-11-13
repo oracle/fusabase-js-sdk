@@ -1,0 +1,28 @@
+{
+  "name": "@fusabase/auth-core",
+  "version": "26.3.1",
+  "type": "module",
+  "description": "Oracle Backend for Firebase shared auth core package",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*",
+      "import": "./dist/*"
+    }
+  },
+  "peerDependencies": {
+    "@fusabase/app": "26.3.1"
+  },
+  "dependencies": {
+    "tslib": "^2.8.1"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}

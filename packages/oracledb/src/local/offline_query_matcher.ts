@@ -26,6 +26,7 @@
 // 
 
 import { Utils } from '../util/utils.js';
+import { safeGetOwn } from '../util/utils_helper.js';
 
 export type OfflineQueryFilter = { field: string | null; op: string; value: any };
 
@@ -43,7 +44,7 @@ export function getFieldValue(data: Record<string, unknown> | null, fieldPath: s
   if (fieldPath.includes('#FieldPath#')) {
     return Utils.getObjectProperty(data, fieldPath);
   }
-  return fieldPath.split('.').reduce<any>((value, key) => value == null ? undefined : value[key], data);
+  return fieldPath.split('.').reduce<any>((value, key) => safeGetOwn(value, key), data);
 }
 
 function matchesCondition(

@@ -34,12 +34,14 @@ export type OfflineSharedTargetDescriptor = {
   targetId: number;
   userId: string;
   targetType?: 'document' | 'query';
+  referenceType?: 'document' | 'dualityViewDocument' | 'collection' | 'dualityViewCollection';
   canonicalId: string;
   canonicalQuery: string;
   path?: string;
   filters?: Array<{ field: string | null; op: string; value: unknown }>;
   orderBy?: Array<{ field: string; direction: 'asc' | 'desc' }>;
   limit?: number | null;
+  column?: string[];
 };
 
 export type OfflineSharedMutationEvent = {

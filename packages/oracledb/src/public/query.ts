@@ -40,14 +40,14 @@ import { VectorMetric, VectorSearchQuery } from '../types/vector.js';
 import { argCheck, typeStrings, validateVectorSearchQuery } from '../util/utils.js';
 
 /**
- * Builds a query from a base query and a sequence of constraints, and/or a composite filter.
+ * Builds a query from a base query and one or more constraints.
  *
- * @param quer - The collection or query to constrain.
- * @param args - Query constraints applied in order.
- * @returns A new query with the supplied constraints.
+ * @param quer - Base query or collection reference.
+ * @param args - Constraints or a composite filter to apply.
+ * @returns The composed query.
  * @example
  * ```ts
- * const adults = query(users, where('age', '>=', 18), orderBy('name'));
+ * const activeTasks = query(tasks, where("done", "==", false), limit(10));
  * ```
  */
 export function query<
@@ -142,12 +142,12 @@ export function query<
  *
  * Documents that do not contain the specified field will not be present in the query result.
  *
- * @param fieldPath - The field used for ordering.
- * @param directionStr - The order direction, ascending by default.
- * @returns An ordering constraint.
+ * @param fieldPath - Field path used for sorting.
+ * @param directionStr - Sort direction.
+ * @returns The ordering constraint.
  * @example
  * ```ts
- * const recent = query(posts, orderBy('createdAt', 'desc'));
+ * const newestFirst = orderBy("createdAt", "desc");
  * ```
  */
 export function orderBy(
@@ -164,13 +164,13 @@ export function orderBy(
  * Creates a QueryFieldFilterConstraint that enforces that documents must contain
  * the specified field and that the value should satisfy the relation constraint provided.
  *
- * @param fieldPath - The field to test.
- * @param opStr - The comparison operator.
- * @param value - The value to compare against.
- * @returns A filter constraint.
+ * @param fieldPath - Field path to evaluate.
+ * @param opStr - Comparison operator.
+ * @param value - Value used in the comparison.
+ * @returns The filter constraint.
  * @example
  * ```ts
- * const active = query(users, where('active', '==', true));
+ * const incomplete = where("done", "==", false);
  * ```
  */
 export function where(
@@ -196,9 +196,8 @@ export function where(
  * @example
  *   // Get the first 5 users ordered by age
  *   const q = query(usersRef, orderBy("age"), limit(5));
- *
- * @param limit - The maximum number of results.
- * @returns A limit constraint.
+ * @param limit - Maximum number of documents to return.
+ * @returns The limit constraint.
  */
 export function limit(limit: number): QueryLimitConstraint {
   return new QueryLimitConstraint('limit', limit);
@@ -214,22 +213,21 @@ export function limit(limit: number): QueryLimitConstraint {
  * @example
  *   // Get the last 5 users ordered by signup date
  *   const q = query(usersRef, orderBy("signupDate"), limitToLast(5));
- *
- * @param limit - The maximum number of results from the end of the ordered set.
- * @returns A limit constraint.
+ * @param limit - Maximum number of documents to return from the end.
+ * @returns The limit constraint.
  */
 export function limitToLast(limit: number): QueryLimitConstraint {
   return new QueryLimitConstraint('limitToLast', limit);
 }
 
 /**
- * Creates an 'endAt' query constraint.
+ * Creates an inclusive end cursor constraint.
  *
- * @param fieldValues - Values that define the inclusive end cursor.
- * @returns An end-cursor constraint.
+ * @param fieldValues - Field values that define the cursor.
+ * @returns The end-cursor constraint.
  * @example
  * ```ts
- * const firstPage = query(users, orderBy('name'), endAt('M'));
+ * const cursor = endAt("task-10");
  * ```
  */
 export function endAt(...fieldValues: unknown[]): QueryEndAtConstraint {
@@ -238,13 +236,13 @@ export function endAt(...fieldValues: unknown[]): QueryEndAtConstraint {
 }
 
 /**
- * Creates an 'endBefore' query constraint.
+ * Creates an exclusive end cursor constraint.
  *
- * @param fieldValues - Values that define the exclusive end cursor.
- * @returns An end-cursor constraint.
+ * @param fieldValues - Field values that define the cursor.
+ * @returns The end-cursor constraint.
  * @example
  * ```ts
- * const firstPage = query(users, orderBy('name'), endBefore('M'));
+ * const cursor = endBefore("task-10");
  * ```
  */
 export function endBefore(...fieldValues: unknown[]): QueryEndAtConstraint {
@@ -253,13 +251,13 @@ export function endBefore(...fieldValues: unknown[]): QueryEndAtConstraint {
 }
 
 /**
- * Creates a 'startAt' query constraint.
+ * Creates an inclusive start cursor constraint.
  *
- * @param fieldValues - Values that define the inclusive start cursor.
- * @returns A start-cursor constraint.
+ * @param fieldValues - Field values that define the cursor.
+ * @returns The start-cursor constraint.
  * @example
  * ```ts
- * const later = query(users, orderBy('name'), startAt('M'));
+ * const cursor = startAt("task-1");
  * ```
  */
 export function startAt(...fieldValues: unknown[]): QueryStartAtConstraint {
@@ -268,13 +266,13 @@ export function startAt(...fieldValues: unknown[]): QueryStartAtConstraint {
 }
 
 /**
- * Creates a 'startAfter' query constraint.
+ * Creates an exclusive start cursor constraint.
  *
- * @param fieldValues - Values that define the exclusive start cursor.
- * @returns A start-cursor constraint.
+ * @param fieldValues - Field values that define the cursor.
+ * @returns The start-cursor constraint.
  * @example
  * ```ts
- * const later = query(users, orderBy('name'), startAfter('M'));
+ * const cursor = startAfter("task-1");
  * ```
  */
 export function startAfter(...fieldValues: unknown[]): QueryStartAtConstraint {
@@ -306,7 +304,7 @@ export function queryEqual<AppModelType, DbModelType extends DocumentData>(
  * @returns A QueryFieldJoinsConstraint instance representing the join.
  * @example
  * ```ts
- * const withProfile = query(users, join('USER_PROFILE'));
+ * const related = join("task_details");
  * ```
  */
 export function join(viewName: string): QueryFieldJoinsConstraint {
@@ -316,7 +314,12 @@ export function join(viewName: string): QueryFieldJoinsConstraint {
 }
 
 /**
- * Creates a vector similarity query constraint for v2 runQuery.
+ * Creates a vector similarity query constraint.
+ *
+ * @param field - Embedding field to search.
+ * @param query - Dense or sparse query embedding.
+ * @param options - Optional metric, result limit, and threshold.
+ * @returns The vector-search constraint.
  *
  * @example
  * const q = query(
@@ -335,11 +338,6 @@ export function join(viewName: string): QueryFieldJoinsConstraint {
  *   )
  * );
  * const sparseSnap = await getDocs(qSparse);
- *
- * @param field - The vector field to search.
- * @param query - The dense or sparse query vector.
- * @param options - Optional metric, result limit, and similarity threshold.
- * @returns A vector-search constraint.
  */
 export function findNearest(
   field: string,

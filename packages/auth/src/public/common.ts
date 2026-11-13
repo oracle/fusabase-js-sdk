@@ -31,16 +31,27 @@ import {ActionCodeInfo} from '../types/action-code.js';
 import { authErrorHandler,argCheck,typeStrings, AuthError, ErrorCodeMessage } from '../errors.js';
 
 /**
- * Subscribes to changes in the current signed-in user.
+ * Registers a listener for account-state changes.
  *
- * @param auth - The authentication service instance.
- * @param nextOrObserver - Callback invoked with the current user or `null`.
- * @param error - Optional callback invoked when the subscription fails.
- * @param completed - Optional callback invoked when the subscription completes.
- * @returns A function that removes the subscription.
+ * @param auth - Authentication service to observe.
+ * @param nextOrObserver - Callback invoked with the current account or `null`.
+ * @param error - Optional callback invoked when observation fails.
+ * @param completed - Optional callback invoked when observation completes.
+ * @returns A function that removes the listener.
  * @example
  * ```ts
  * const unsubscribe = onAuthStateChanged(auth, user => console.log(user?.uid));
+ * unsubscribe();
+ * ```
+ *
+ * @example Handle listener errors and completion.
+ * ```ts
+ * const unsubscribe = onAuthStateChanged(
+ *   auth,
+ *   user => console.log(user?.uid ?? "signed out"),
+ *   error => console.error(error),
+ *   () => console.log("listener closed")
+ * );
  * ```
  */
 export function onAuthStateChanged(

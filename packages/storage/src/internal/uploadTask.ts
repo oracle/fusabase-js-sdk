@@ -23,7 +23,7 @@
 // limitations under the License.
 //
 //-----------------------------------------------------------------------------
-// 
+//
 
 import { argCheck, StorageError, storageErrorHandler, typeStrings, StorageErrorCode } from "../errors.js";
 import { UploadTaskController } from "../helpers/uploadHelper.js";
@@ -33,6 +33,12 @@ import { getAccessToken, Utils, CustomEvent } from "./utils.js";
 
 /**
  * Class representing an upload task.
+ *
+ * @example
+ * ```ts
+ * const task = uploadBytesResumable(fileRef, file);
+ * task.pause();
+ * ```
  */
 export class UploadTask {
   /** The current snapshot of the upload task. */
@@ -49,12 +55,20 @@ export class UploadTask {
   /** @internal */
   _running: boolean;
 
-  /**
-   * Constructs an UploadTask.
-   * @param data - The data to upload.
-   * @param metadata - The metadata for the upload.
-   * @param ref - The StorageReference for the upload.
-   */
+/**
+ * Constructs a UploadTask instance with the supplied configuration.
+ *
+ * @param data - The document or request data to write.
+ * @param metadata - The metadata accepted by this operation.
+ * @param ref - The ref accepted by this operation.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { UploadTask } from "fusabase/storage";
+ * const result = new UploadTask({ title: "Example" }, { title: "Example" }, value);
+ * void result;
+ * ```
+ */
   constructor(data: any, metadata: UploadMetadata, ref: any) {
     this._tasks = [];
     this._queue = Promise.resolve();
@@ -170,11 +184,17 @@ export class UploadTask {
     }
   }
 
-  /**
-   * @function
-   * Cancel the task. 
-   * @returns {void} 
-   */
+/**
+ * Executes the cancel operation for this public SDK type.
+ *
+ * @returns The result produced by `cancel`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { UploadTask } from "fusabase/storage";
+ * const result = client.cancel();
+ * void result;
+ * ```
+ */
   cancel() {
     this._enqueue(async () => {
       if (this.snapshot?.state === TaskState.SUCCESS) {
@@ -188,16 +208,26 @@ export class UploadTask {
     });
   }
 
-  /**
-   * @function
-   * Set callbacks for the task.
-   * @returns {void} 
-   */
+/**
+ * Executes the on operation for this public SDK type.
+ *
+ * @param event - The event accepted by this operation.
+ * @param next - The next accepted by this operation.
+ * @param error - The authentication or service error to inspect.
+ * @param complete - The complete accepted by this operation.
+ * @returns The result produced by `on`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { UploadTask } from "fusabase/storage";
+ * const result = client.on(value, value, new Error("example"), value);
+ * void result;
+ * ```
+ */
   on(event: string, next: ((snapshot: UploadTaskSnapshot) => void) | null = null, error: ((error: any) => void) | null = null, complete: (() => void) | null = null) {
     argCheck(event, "Invalid event passed", true, [typeStrings.STRING]);
     argCheck(next, "Invalid next callback", false, [typeStrings.FUNCTION]);
     argCheck(error, "Invalid error callback", false, [typeStrings.FUNCTION]);
-    argCheck(complete, "Invalid complete callback", false, 
+    argCheck(complete, "Invalid complete callback", false,
       [typeStrings.FUNCTION]);
     const controller = new AbortController();
     if (next || error || complete) {
@@ -209,7 +239,7 @@ export class UploadTask {
       return () => controller.abort();
     }
     else {
-      return (callbacks: any) => 
+      return (callbacks: any) =>
         this.uploadController.setCallBacks(event, callbacks, controller);
     }
   }
@@ -268,11 +298,17 @@ export class UploadTask {
     });
   }
 
-  /**
-  * @function
-  * Resumes the task. 
-  * @returns {void} 
-  */
+/**
+ * Executes the resume operation for this public SDK type.
+ *
+ * @returns The result produced by `resume`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { UploadTask } from "fusabase/storage";
+ * const result = client.resume();
+ * void result;
+ * ```
+ */
   resume(): void {
     if (!this.uploadController.isMultipart) {
       return;
@@ -290,11 +326,17 @@ export class UploadTask {
     });
   }
 
-  /**
-  * @function
-  * Pause the task. 
-  * @returns {void} 
-  */
+/**
+ * Executes the pause operation for this public SDK type.
+ *
+ * @returns The result produced by `pause`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { UploadTask } from "fusabase/storage";
+ * const result = client.pause();
+ * void result;
+ * ```
+ */
   pause(): void {
     if (!this.uploadController.isMultipart) {
       return;
@@ -308,12 +350,19 @@ export class UploadTask {
     });
   }
 
-  /**
-   * Sets a callback for successful completion of the task.
-   * @param onFulfilled - Callback for success.
-   * @param onRejected - Callback for error.
-   * @returns A promise.
-   */
+/**
+ * Executes the then operation for this public SDK type.
+ *
+ * @param onFulfilled - The onFulfilled accepted by this operation.
+ * @param onRejected - The onRejected accepted by this operation.
+ * @returns The result produced by `then`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { UploadTask } from "fusabase/storage";
+ * const result = client.then(value, value);
+ * void result;
+ * ```
+ */
   then(onFulfilled?: ((snapshot: UploadTaskSnapshot) => unknown) | null, onRejected?: ((error: StorageError) => unknown) | null): Promise<unknown> {
     argCheck(onFulfilled, "Invalid success callback", false,
        [typeStrings.FUNCTION]);
@@ -321,11 +370,18 @@ export class UploadTask {
     return this.promise.then(onFulfilled, onRejected);
   }
 
-  /**
-   * Sets a callback for unsuccessful completion of the task.
-   * @param onRejected - Callback for error.
-   * @returns A promise.
-   */
+/**
+ * Executes the catch operation for this public SDK type.
+ *
+ * @param onRejected - The onRejected accepted by this operation.
+ * @returns The result produced by `catch`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { UploadTask } from "fusabase/storage";
+ * const result = client.catch(value);
+ * void result;
+ * ```
+ */
   catch(onRejected: (error: StorageError) => unknown): Promise<unknown> {
     argCheck(onRejected, "Invalid callback", false, [typeStrings.FUNCTION]);
     return this.then(null, onRejected);
@@ -334,6 +390,11 @@ export class UploadTask {
 
 /**
  * Class representing a snapshot of an upload task.
+ *
+ * @example
+ * ```ts
+ * task.on(TaskEvent.STATE_CHANGED, snapshot => console.log(snapshot.bytesTransferred));
+ * ```
  */
 export class UploadTaskSnapshot {
   /** The number of bytes transferred so far. */
@@ -349,12 +410,20 @@ export class UploadTaskSnapshot {
   /** The total number of bytes to upload. */
   totalBytes: number;
 
-  /**
-   * Constructs an UploadTaskSnapshot.
-   * @param task - The UploadTask instance.
-   * @param metadata - The metadata for the upload.
-   * @param ref - The StorageReference for the upload.
-   */
+/**
+ * Constructs a UploadTaskSnapshot instance with the supplied configuration.
+ *
+ * @param task - The task accepted by this operation.
+ * @param metadata - The metadata accepted by this operation.
+ * @param ref - The ref accepted by this operation.
+ * @returns The result produced by `constructor`, including any requested data or handle.
+ * @example
+ * ```ts
+ * import { UploadTaskSnapshot } from "fusabase/storage";
+ * const result = new UploadTaskSnapshot(value, { title: "Example" }, value);
+ * void result;
+ * ```
+ */
   constructor(task: UploadTask, metadata: FullMetadata, ref: any) {
     this.task = task;
     this.ref = ref;

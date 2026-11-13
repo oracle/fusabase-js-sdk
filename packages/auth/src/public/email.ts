@@ -37,6 +37,10 @@ import { authErrorHandler,argCheck,typeStrings, AuthError, ErrorCodeMessage } fr
  * @param email - The user's email.
  * @param password - The user's password.
  * @returns A promise resolving with a UserCredential on success.
+ * @example
+ * ```ts
+ * const credential = await createUserWithEmailAndPassword(auth, email, password);
+ * ```
  */
 export function createUserWithEmailAndPassword(
   auth: Auth,
@@ -94,5 +98,4 @@ export function createUserWithEmailAndPassword(
 //   email: string,
 //   actionCodeSettings: ActionCodeSettings
 // ): Promise<void>;
-
 

@@ -30,6 +30,7 @@ import { AuthCredential, UserCredential } from '../internal/credential.js';
 import { ActionCodeSettings } from '../types/action-code.js';
 import { AuthProvider } from '../providers/provider.js';
 import { PopupRedirectResolver } from '../types/auth.js';
+import { MultiFactorUser } from '../types/multifactor.js';
 
 
 /**
@@ -64,7 +65,7 @@ export declare function getIdTokenResult(user: User, forceRefresh?: boolean): Pr
  * const mfaUser = multiFactor(user);
  * ```
  */
-// export declare function multiFactor(user: User): MultiFactorUser;
+export declare function multiFactor(user: User): MultiFactorUser;
 
 /**
  * Reloads the user account data.
